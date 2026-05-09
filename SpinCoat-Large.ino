@@ -1,13 +1,13 @@
 /**********************************************************************
 *   Motor Controller with Speed and Acceleration at Hardware Interrupt
-*   Ver 0.91  Date : 6/5/26
-*   Authors: K. Bhaskar, Siddharth
-*   Note : All Hardware interrupt priorities need to be checked 
+*   Ver 0.92  Date : 9/5/26
+*   Authors: K. Bhaskar, Siddharth P Bharadwaj
 */
 
 /***********************
 * Move out all constants to #define
 * Check out all clashes between hardware interrupts and priorities
+* Note : All Hardware interrupt priorities need to be checked
 * Comment it all.
 * Reorganize functions and group variables too
 */
@@ -23,14 +23,14 @@
 #define MAX_PASSES 5
 #define CONFIG_VERSION 1  // Change if config params update
 #define DEBOUNCE_MS 200
-#define TIMER_FREQUENCY 1000000  // 1 MHz
+#define TIMER_FREQUENCY 1000000    // 1 MHz
 #define TIMER_INTERVAL_US 1000000  // 1,000,000 us = 1s
 #define MAX_FREQ 40000000
 
 typedef struct {
   float rpm;
   float accel;
-  float delayMs;
+  float delay;
 } Pass;
 
 typedef struct {
@@ -55,14 +55,13 @@ volatile bool sendTelemetry = false;
 volatile bool emergencyButtonPressed = false;
 volatile unsigned long lastInterruptTime = 0;
 
-hw_timer_t *timer = NULL;
+hw_timer_t* timer = NULL;
 
 void IRAM_ATTR onTimer() {
-  // output RPM, accel, etc all important stuff periodically via BT
   sendTelemetry = true;
 }
 
-// **** need to change this function. millis in interrupt is not safe. can move debounce part outside ****
+// ** need to change this function. millis in interrupt is not safe. can move debounce part outside**
 void IRAM_ATTR handleButtonPress() {
   unsigned long interruptTime = millis();
 
@@ -114,8 +113,8 @@ void setupPWM() {
 void setupTimer() {
   // Use timer 0, frequency 1MHz, count up
   timer = timerBegin(1000000);
-  timerAttachInterrupt(timer, &onTimer); // Attach handler
-  timerAlarm(timer, TIMER_INTERVAL_US, true, 0); // Start
+  timerAttachInterrupt(timer, &onTimer);          // Attach handler
+  timerAlarm(timer, TIMER_INTERVAL_US, true, 0);  // Start
 }
 
 void setup() {
@@ -149,7 +148,7 @@ void loop() {
   }
 
   if (sendTelemetry) {
-    // send important data (runs periodically)
+    BT.println(getPasses());
     sendTelemetry = false;
   }
 
@@ -189,12 +188,12 @@ void stopMotor() {
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);
 }
 
-bool addPass(float rpm, float accel, float delayMs) {
+bool addPass(float rpm, float accel, float delay) {
   if (config.numPasses >= MAX_PASSES) return false;
 
   config.passes[config.numPasses].rpm = rpm;
   config.passes[config.numPasses].accel = accel;
-  config.passes[config.numPasses].delayMs = delayMs;
+  config.passes[config.numPasses].delay = delay;
   config.numPasses++;
   saveConfig();
 
@@ -209,31 +208,67 @@ bool isValidPWM(int pin) {
   return false;
 }
 
-/* implement for pass=int, array {rpm,accel,delay} as many as passes
-    Make data persistent across power cycle
-    */
-String getJSON() {
-  String json = "{";
-  json += "\"freq\":" + String(config.frequency) + ",";
-  json += "\"duty\":" + String(config.dutyCycle, 2) + ",";
-  json += "\"move\":" + String(config.length, 2) + ",";
-  json += "\"pwmdur\":" + String(config.duration, 2) + ",";
-  json += "\"pwmpin\":" + String(config.pwmPin) + ",";
-  json += "\"passes\":[";
+String getPasses() {
+  String json = "[";
   for (int i = 0; i < config.numPasses; ++i) {
     json += "{";
     json += "\"rpm\":" + String(config.passes[i].rpm) + ",";
     json += "\"accel\":" + String(config.passes[i].accel) + ",";
-    json += "\"delay\":" + String(config.passes[i].delayMs);
+    json += "\"delay\":" + String(config.passes[i].delay);
     json += "}";
     if (i < config.numPasses - 1) json += ",";
   }
   json += "]";
+
+  return json;
+}
+
+String getJSON() {
+  String json = "{";
+  json += "\"freq\":" + String(config.frequency) + ",";
+  json += "\"duty\":" + String(config.dutyCycle) + ",";
+  json += "\"move\":" + String(config.length) + ",";
+  json += "\"pwmdur\":" + String(config.duration) + ",";
+  json += "\"pwmpin\":" + String(config.pwmPin) + ",";
+  json += "\"passes\":" + getPasses();
   json += "}";
 
   return json;
 }
 
+/**
+showparm
+  Print current parameters as JSON over Serial and BT.
+
+freq=<int>
+  Set PWM frequency.
+  Range: 1..MAX_FREQ
+  Example: freq=1000
+
+duty=<float>
+  Set PWM duty cycle %.
+  Range: 0..100
+  Example: duty=45.5
+
+move=<float>
+  Move in mm.
+  Range: >= 0
+  Example: move=25
+
+pwmdur=<float>
+  Set PWM duration.
+  Range: >= 0
+  Example: pwmdur=500
+
+pwmpin=<int>
+  Set PWM output pin.
+  Must be a valid and available PWM pin.
+  Example: pwmpin=5
+
+addpass=<float>,<float>,<float>
+  Add a pass (rpm, acceleration, delay (ms)).
+  Example: addpass=1200,50,200
+*/
 String parse(String input) {
   if (input.length() == 0) return "ERR: Empty input";
   int sepIndex = input.indexOf('=');
@@ -261,42 +296,36 @@ String parse(String input) {
     changeFreq(freq);
 
     return "OK";
-
   } else if (command.equalsIgnoreCase("duty")) {
     float duty = value.toFloat();
     if (duty < 0 || duty > 100) return "ERR: Invalid value";
     changeDuty(duty);
 
     return "OK";
-
   } else if (command.equalsIgnoreCase("move")) {
     float len = value.toFloat();
     if (len < 0) return "ERR: Invalid value";
     changeLen(len);
 
     return "OK";
-
   } else if (command.equalsIgnoreCase("pwmdur")) {
     float dur = value.toFloat();
     if (dur < 0) return "ERR: Invalid value";
     changeDur(dur);
 
     return "OK";
-
   } else if (command.equalsIgnoreCase("pwmpin")) {
     int pin = value.toInt();
     if (!isValidPWM(pin)) return "ERR: Invalid value";
     changePin(pin);
 
     return "OK";
-
   } else if (command.equalsIgnoreCase("addpass")) {
-    float rpm, accel, delayMs;
-    if (sscanf(value.c_str(), "%f,%f,%f", &rpm, &accel, &delayMs) != 3) return "ERR: Invalid value";
-    if (!addPass(rpm, accel, delayMs)) return "ERR: Max passes";
+    float rpm, accel, delay;
+    if (sscanf(value.c_str(), "%f,%f,%f", &rpm, &accel, &delay) != 3) return "ERR: Invalid value";
+    if (!addPass(rpm, accel, delay)) return "ERR: Max passes";
 
     return "OK";
-
   } else {
     return "Invalid";
   }
