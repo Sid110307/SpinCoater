@@ -1,6 +1,6 @@
 /**********************************************************************
 *   Motor Controller with Speed and Acceleration at Hardware Interrupt
-*   Ver 0.92  Date : 9/5/26
+*   Ver 0.93  Date : 14/5/26
 *   Authors: K. Bhaskar, Siddharth P Bharadwaj
 */
 
@@ -61,13 +61,18 @@ void IRAM_ATTR onTimer() {
   sendTelemetry = true;
 }
 
-// ** need to change this function. millis in interrupt is not safe. can move debounce part outside**
 void IRAM_ATTR handleButtonPress() {
-  unsigned long interruptTime = millis();
+  emergencyButtonPressed = true;
+}
 
-  // Software Debounce: ignore interrupts if they happen within DEBOUNCE_MS
-  if (interruptTime - lastInterruptTime > DEBOUNCE_MS) emergencyButtonPressed = true;
-  lastInterruptTime = interruptTime;
+void setDefaultConfig() {
+  config.version = CONFIG_VERSION;
+  config.frequency = DEFAULT_FREQ;
+  config.dutyCycle = DEFAULT_DUTY;
+  config.length = 0;
+  config.duration = 0;
+  config.pwmPin = DEFAULT_PWM_PIN;
+  config.numPasses = 0;
 }
 
 void saveConfig() {
@@ -80,19 +85,8 @@ void loadConfig() {
   prefs.begin("motor", true);
   if (prefs.isKey("cfg")) {
     prefs.getBytes("cfg", &config, sizeof(config));
-    if (config.version != CONFIG_VERSION) {
-      prefs.end();
-      return;
-    }
-  } else {
-    config.version = CONFIG_VERSION;
-    config.frequency = DEFAULT_FREQ;
-    config.dutyCycle = DEFAULT_DUTY;
-    config.length = 0;
-    config.duration = 0;
-    config.pwmPin = DEFAULT_PWM_PIN;
-    config.numPasses = 0;
-  }
+    if (config.version != CONFIG_VERSION) setDefaultConfig();
+  } else setDefaultConfig();
   prefs.end();
 }
 
@@ -112,7 +106,7 @@ void setupPWM() {
 
 void setupTimer() {
   // Use timer 0, frequency 1MHz, count up
-  timer = timerBegin(1000000);
+  timer = timerBegin(TIMER_FREQUENCY);
   timerAttachInterrupt(timer, &onTimer);          // Attach handler
   timerAlarm(timer, TIMER_INTERVAL_US, true, 0);  // Start
 }
@@ -126,8 +120,11 @@ void setup() {
   // Trigger on FALLING (HIGH to LOW) when button is pressed
   attachInterrupt(digitalPinToInterrupt(EMERGENCY_BUTTON), handleButtonPress, FALLING);
 
-  BT.begin("SpinCoat");
   Serial.begin(115200);
+  Serial.println("Ready");
+  BT.begin("SpinCoat");
+  BT.setTimeout(30);
+  BT.println("Ready");
 }
 
 void loop() {
@@ -137,11 +134,12 @@ void loop() {
     incomingMessage.trim();
     String response = parse(incomingMessage);
     BT.println(response);
-
-    delay(50);
   }
 
-  if (emergencyButtonPressed) {
+  unsigned long interruptTime = millis();
+  if ((interruptTime - lastInterruptTime > DEBOUNCE_MS) && emergencyButtonPressed) {
+    lastInterruptTime = interruptTime;
+
     Serial.println("Emergency Button Pressed!");
     emergencyButtonPressed = false;  // Reset flag
     stopMotor();
@@ -156,36 +154,53 @@ void loop() {
 }
 
 void changeFreq(int freq) {
+  if (config.frequency == freq) return;
+
   config.frequency = freq;
   mcpwm_set_frequency(MCPWM_UNIT_0, MCPWM_TIMER_0, freq);
+  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, config.dutyCycle);
   saveConfig();
 }
 
 void changeDuty(float duty) {
+  if (config.dutyCycle == duty) return;
+
   config.dutyCycle = duty;
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, duty);
   saveConfig();
 }
 
 void changeLen(float len) {
+  if (config.length == len) return;
+
   config.length = len;
   saveConfig();
 }
 
 void changeDur(float dur) {
+  if (config.duration == dur) return;
+
   config.duration = dur;
   saveConfig();
 }
 
 void changePin(int pin) {
+  if (config.pwmPin == pin) return;
+
   config.pwmPin = pin;
   setupPWM();
   saveConfig();
 }
 
+void startMotor() {
+  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, config.dutyCycle);
+  mcpwm_start(MCPWM_UNIT_0, MCPWM_TIMER_0);
+}
+
 void stopMotor() {
   /* handle the Enable Pin and duty cycle as well*/
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);
+  mcpwm_stop(MCPWM_UNIT_0, MCPWM_TIMER_0);
 }
 
 bool addPass(float rpm, float accel, float delay) {
@@ -237,6 +252,12 @@ String getJSON() {
 }
 
 /**
+start
+  Start motor
+
+stop
+  Stop motor
+
 showparm
   Print current parameters as JSON over Serial and BT.
 
@@ -274,7 +295,13 @@ String parse(String input) {
   int sepIndex = input.indexOf('=');
 
   if (sepIndex == -1) {
-    if (input.equalsIgnoreCase("showparm")) {
+    if (input.equalsIgnoreCase("start")) {
+      startMotor();
+      return "OK";
+    } else if (input.equalsIgnoreCase("stop")) {
+      stopMotor();
+      return "OK";
+    } else if (input.equalsIgnoreCase("showparm")) {
       String json = getJSON();
       Serial.println(json);
       BT.println(json);
@@ -323,10 +350,11 @@ String parse(String input) {
   } else if (command.equalsIgnoreCase("addpass")) {
     float rpm, accel, delay;
     if (sscanf(value.c_str(), "%f,%f,%f", &rpm, &accel, &delay) != 3) return "ERR: Invalid value";
+    if (rpm < 0 || accel < 0 || delay < 0) return "ERR: Invalid value";
     if (!addPass(rpm, accel, delay)) return "ERR: Max passes";
 
     return "OK";
   } else {
-    return "Invalid";
+    return "ERR: Invalid cmd";
   }
 }
