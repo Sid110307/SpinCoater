@@ -4,7 +4,7 @@
 #include "config.h"
 
 void setupPWM();
-void startMotor();
+bool startMotor();
 void stopMotor();
 
 bool changeFreq(int freq);

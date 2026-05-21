@@ -1,17 +1,6 @@
 #include "motor.h"
 #include "config.h"
-#include "globals.h"
-
-static constexpr int validPins[] = { 13, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33 };
-static constexpr int numValidPins = sizeof(validPins) / sizeof(validPins[0]);
-
-static bool isValidPWM(int pin) {
-  if (pin == EMERGENCY_BUTTON) return false;
-
-  for (int i = 0; i < numValidPins; ++i)
-    if (validPins[i] == pin) return true;
-  return false;
-}
+#include "hardware.h"
 
 void setupPWM() {
   mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, config.pwmPin);
@@ -24,18 +13,24 @@ void setupPWM() {
   pwm_config.duty_mode = MCPWM_DUTY_MODE_0;  // Active High
 
   mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, config.dutyCycle);
+  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);
+  mcpwm_stop(MCPWM_UNIT_0, MCPWM_TIMER_0);
 }
 
-void startMotor() {
+bool startMotor() {
+  if (isEmergencyLatched() || isAlarmLatched()) return false;
+
+  applyMotorRunState(true);
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, config.dutyCycle);
   mcpwm_start(MCPWM_UNIT_0, MCPWM_TIMER_0);
+
+  return true;
 }
 
 void stopMotor() {
-  /* handle the Enable Pin and duty cycle as well*/
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);
   mcpwm_stop(MCPWM_UNIT_0, MCPWM_TIMER_0);
+  applyMotorRunState(false);
 }
 
 bool changeFreq(int freq) {
@@ -84,12 +79,16 @@ bool changeDur(float dur) {
 
 bool changePin(int pin) {
   if (config.pwmPin == pin) return true;
-  if (!isValidPWM(pin)) return false;
+  if (!isValidMotorPwmPin(pin)) return false;
+
+  const bool wasRunning = isMotorRunning();
+  if (wasRunning) stopMotor();
 
   config.pwmPin = pin;
   setupPWM();
   saveConfig();
 
+  if (wasRunning && !isEmergencyLatched() && !isAlarmLatched()) startMotor();
   return true;
 }
 

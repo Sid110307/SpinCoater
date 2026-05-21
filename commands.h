@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "hardware.h"
+
 /**
 start
   Start motor.
@@ -9,8 +11,14 @@ start
 stop
   Stop motor.
 
-showparm
+status
   Print current parameters as JSON over Serial and BT.
+
+estop
+  Emergency stop immediately.
+
+clearfault
+  Clear emergency/alarm fault state.
 
 freq=<int>
   Set PWM frequency.
@@ -35,7 +43,15 @@ pwmdur=<float>
 pwmpin=<int>
   Set PWM output pin.
   Must be a valid and available PWM pin.
-  Example: pwmpin=5
+  Example: pwmpin=22
+
+dir=<1|0>
+  Set motor direction output (1: CW, 0: CCW).
+  Example: dir=1
+
+polepairs=<int>
+  Set speed sensor pole-pair count used for RPM calculation.
+  Example: polepairs=4
 
 addpass=<float>,<float>,<float>
   Add a pass (rpm, acceleration, delay (ms)).

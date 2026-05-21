@@ -1,14 +1,14 @@
 #include "config.h"
 #include "globals.h"
+#include "hardware.h"
 
 void loadConfig() {
   prefs.begin("motor", true);
   if (prefs.isKey("cfg")) {
     prefs.getBytes("cfg", &config, sizeof(config));
     // if config params change, we need a version to keep track
-    if (config.version != CONFIG_VERSION) setDefaultConfig();
-  }
-  else setDefaultConfig();
+    if (config.version != CONFIG_VERSION || !isValidMotorPwmPin(config.pwmPin)) setDefaultConfig();
+  } else setDefaultConfig();
   prefs.end();
 }
 
@@ -25,5 +25,6 @@ void setDefaultConfig() {
   config.length = 0;
   config.duration = 0;
   config.pwmPin = DEFAULT_PWM_PIN;
+  config.polePairs = DEFAULT_POLE_PAIRS;
   config.numPasses = 0;
 }

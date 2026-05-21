@@ -1,12 +1,7 @@
 /**********************************************************************
 *   Motor Controller with Speed and Acceleration at Hardware Interrupt
-*   Ver 0.94  Date : 14/5/26
+*   Ver: 0.95  Date: 21/5/26
 *   Authors: K. Bhaskar, Siddharth P Bharadwaj
-*/
-
-/***********************
-* Check out all clashes between hardware interrupts and priorities
-* Note : All Hardware interrupt priorities need to be checked
 */
 
 #include <Arduino.h>
@@ -16,69 +11,75 @@
 #include "motor.h"
 #include "io.h"
 #include "commands.h"
+#include "hardware.h"
 
 BluetoothSerial BT;
 Preferences prefs;
 MotorConfig config;
 
 volatile bool sendTelemetry = false;
-volatile bool emergencyButtonPressed = false;
-volatile unsigned long lastInterruptTime = 0;
-
 hw_timer_t* timer = NULL;
+
+static constexpr size_t COMMAND_BUFFER_SIZE = 128;
+char bluetoothCommandBuffer[COMMAND_BUFFER_SIZE];
+size_t bluetoothCommandLength = 0;
 
 void IRAM_ATTR onTimer() {
   sendTelemetry = true;
 }
 
-void IRAM_ATTR handleButtonPress() {
-  emergencyButtonPressed = true;
-}
-
 void setup() {
   loadConfig();
+  setupHardware();
   setupPWM();
 
   // Use timer 0, frequency 1MHz, count up
-  timer = timerBegin(TIMER_FREQUENCY);
-  timerAttachInterrupt(timer, &onTimer);
-  timerAlarm(timer, TIMER_INTERVAL_US, true, 0);
+  timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer, &onTimer, true);
+  timerAlarmWrite(timer, TIMER_INTERVAL_US, true);
+  timerAlarmEnable(timer);
 
-  pinMode(EMERGENCY_BUTTON, INPUT_PULLUP);
   // Trigger on FALLING (HIGH to LOW) when button is pressed
-  attachInterrupt(digitalPinToInterrupt(EMERGENCY_BUTTON), handleButtonPress, FALLING);
+  attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY), handleEmergencyInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(Pins::ALM), handleAlarmInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(Pins::SPEED), handleSpeedInterrupt, RISING);
 
   BT.begin("SpinCoat");
+  BT.setPin("123456");
   BT.println("Ready");
   Serial.begin(115200);
   Serial.println("Ready");
 }
 
 void loop() {
-  if (BT.available() > 0) {
-    String incomingMessage = BT.readStringUntil('\n');
-    // Trim to remove trailing carriage return (\r)
-    incomingMessage.trim();
-    String response = parse(incomingMessage);
-    BT.println(response);
-  }
+  setBluetoothConnected(BT.hasClient());
+  serviceHardware();
 
-  // Debounce
-  unsigned long interruptTime = millis();
-  if ((interruptTime - lastInterruptTime > DEBOUNCE_MS) && emergencyButtonPressed) {
-    lastInterruptTime = interruptTime;
+  while (BT.available() > 0) {
+    char incoming = static_cast<char>(BT.read());
 
-    Serial.println("Emergency Button Pressed!");
-    emergencyButtonPressed = false;  // Reset flag
-    stopMotor();
+    if (incoming == '\r') continue;
+    if (incoming == '\n') {
+      bluetoothCommandBuffer[bluetoothCommandLength] = '\0';
+      String response = parse(String(bluetoothCommandBuffer));
+      BT.println(response);
+      bluetoothCommandLength = 0;
+
+      continue;
+    }
+
+    if (bluetoothCommandLength < COMMAND_BUFFER_SIZE - 1)
+      bluetoothCommandBuffer[bluetoothCommandLength++] = incoming;
+    else bluetoothCommandLength = 0;
   }
 
   if (sendTelemetry) {
-    getPasses(BT); // Reference to Stream object of BT
+    sampleSpeedRpm();
+    getPasses(BT);  // Reference to Stream object of BT
     BT.println();
 
     sendTelemetry = false;
   }
 
-  delay(20);
+  delay(1);
 }
