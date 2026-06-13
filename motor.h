@@ -3,7 +3,7 @@
 #include <driver/mcpwm.h>
 #include "config.h"
 
-void setupPWM();
+bool setupPWM();
 bool startMotor();
 void stopMotor();
 

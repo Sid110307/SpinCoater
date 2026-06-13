@@ -2,20 +2,25 @@
 
 #include "motor.h"
 
-static volatile bool gEmergencyInterruptPending = false;
-static volatile bool gAlarmInterruptPending = false;
-static volatile uint32_t gSpeedPulseCount = 0;
+struct RuntimeState {
+	volatile bool emergencyInterruptPending = false;
+	volatile bool alarmInterruptPending = false;
+	volatile uint32_t speedPulseCount = 0;
 
-static MotorDirection gMotorDirection = MotorDirection::Clockwise;
-static bool gMotorRunning = false;
-static bool gEmergencyLatched = false;
-static bool gAlarmLatched = false;
-static bool gBluetoothConnected = false;
-static bool gStatusLedReady = false;
-static float gLastMeasuredRpm = 0.0f;
+	MotorDirection motorDirection = MotorDirection::Clockwise;
+	bool motorRunning = false;
+	bool emergencyLatched = false;
+	bool alarmLatched = false;
+	bool bluetoothConnected = false;
+	bool statusLedReady = false;
+	float lastMeasuredRpm = 0.0f;
+};
+
+static RuntimeState state;
+static unsigned long lastEmergencyMillis = 0;
 
 static void writeStatusLed(uint8_t red, uint8_t green, uint8_t blue) {
-	if (!gStatusLedReady) return;
+	if (!state.statusLedReady) return;
 
 	digitalWrite(Pins::LED_R, red ? HIGH : LOW);
 	digitalWrite(Pins::LED_G, green ? HIGH : LOW);
@@ -23,23 +28,20 @@ static void writeStatusLed(uint8_t red, uint8_t green, uint8_t blue) {
 }
 
 static void initializeStatusLed() {
-	gStatusLedReady = true;
-
-	if (gStatusLedReady) {
-		writeStatusLed(0, 0, 0);
-	}
+	state.statusLedReady = true;
+	if (state.statusLedReady) writeStatusLed(0, 0, 0);
 }
 
 bool isValidMotorPwmPin(int pin) {
 	switch (pin) {
-		case 13:
-		case 16:
-		case 17:
-		case 22:
-		case 32:
-			return true;
-		default:
-			return false;
+	case 13:
+	case 16:
+	case 17:
+	case 22:
+	case 32:
+		return true;
+	default:
+		return false;
 	}
 }
 
@@ -70,14 +72,18 @@ void serviceHardware() {
 	bool alarmPending = false;
 
 	noInterrupts();
-	emergencyPending = gEmergencyInterruptPending;
-	alarmPending = gAlarmInterruptPending;
-	gEmergencyInterruptPending = false;
-	gAlarmInterruptPending = false;
+	emergencyPending = state.emergencyInterruptPending;
+	alarmPending = state.alarmInterruptPending;
+	state.emergencyInterruptPending = false;
+	state.alarmInterruptPending = false;
 	interrupts();
 
 	if (emergencyPending) {
-		setEmergencyLatched(true);
+		unsigned long now = millis();
+		if (now - lastEmergencyMillis >= DEBOUNCE_MS) {
+			lastEmergencyMillis = now;
+			setEmergencyLatched(true);
+		}
 	}
 
 	if (alarmPending) {
@@ -88,31 +94,31 @@ void serviceHardware() {
 }
 
 void setBluetoothConnected(bool connected) {
-	if (gBluetoothConnected == connected) return;
+	if (state.bluetoothConnected == connected) return;
 
-	gBluetoothConnected = connected;
+	state.bluetoothConnected = connected;
 	updateStatusLed();
 }
 
 bool isBluetoothConnected() {
-	return gBluetoothConnected;
+	return state.bluetoothConnected;
 }
 
 void setMotorDirection(MotorDirection direction) {
-	gMotorDirection = direction;
+	state.motorDirection = direction;
 	digitalWrite(Pins::DIR, direction == MotorDirection::Clockwise ? HIGH : LOW);
 	updateStatusLed();
 }
 
 MotorDirection getMotorDirection() {
-	return gMotorDirection;
+	return state.motorDirection;
 }
 
 void applyMotorRunState(bool running) {
-	gMotorRunning = running;
+	state.motorRunning = running;
 
 	// The EN pin drives a 2N2222 stage, so the MCU signal is intentionally
-	// inverted from the downstream motor-driver enable behavior.
+	// inverted from the downstream motor-driver enable behavior
 	digitalWrite(Pins::EN, running ? LOW : HIGH);
 	digitalWrite(Pins::BRK, running ? LOW : HIGH);
 
@@ -120,7 +126,7 @@ void applyMotorRunState(bool running) {
 }
 
 bool isMotorRunning() {
-	return gMotorRunning;
+	return state.motorRunning;
 }
 
 void setMotorPolePairs(int polePairs) {
@@ -134,9 +140,9 @@ int getMotorPolePairs() {
 }
 
 void setEmergencyLatched(bool latched) {
-	if (gEmergencyLatched == latched) return;
+	if (state.emergencyLatched == latched) return;
 
-	gEmergencyLatched = latched;
+	state.emergencyLatched = latched;
 	if (latched) {
 		applyMotorRunState(false);
 		stopMotor();
@@ -145,7 +151,7 @@ void setEmergencyLatched(bool latched) {
 }
 
 bool isEmergencyLatched() {
-	return gEmergencyLatched;
+	return state.emergencyLatched;
 }
 
 void clearEmergencyLatched() {
@@ -153,9 +159,9 @@ void clearEmergencyLatched() {
 }
 
 void setAlarmLatched(bool latched) {
-	if (gAlarmLatched == latched) return;
+	if (state.alarmLatched == latched) return;
 
-	gAlarmLatched = latched;
+	state.alarmLatched = latched;
 	if (latched) {
 		applyMotorRunState(false);
 		stopMotor();
@@ -164,7 +170,7 @@ void setAlarmLatched(bool latched) {
 }
 
 bool isAlarmLatched() {
-	return gAlarmLatched;
+	return state.alarmLatched;
 }
 
 void clearAlarmLatched() {
@@ -172,64 +178,60 @@ void clearAlarmLatched() {
 }
 
 MotorStatus getMotorStatus() {
-	if (gEmergencyLatched) return MotorStatus::EmergencyStop;
-	if (gAlarmLatched) return MotorStatus::AlarmFault;
-	if (!gMotorRunning) return MotorStatus::Idle;
-	return gMotorDirection == MotorDirection::Clockwise ? MotorStatus::RunningClockwise : MotorStatus::RunningCounterClockwise;
+	if (state.emergencyLatched) return MotorStatus::EmergencyStop;
+	if (state.alarmLatched) return MotorStatus::AlarmFault;
+	if (!state.motorRunning) return MotorStatus::Idle;
+	return state.motorDirection == MotorDirection::Clockwise ? MotorStatus::RunningClockwise : MotorStatus::RunningCounterClockwise;
 }
 
 const char* motorStatusToString(MotorStatus status) {
 	switch (status) {
-		case MotorStatus::Idle:
-			return "idle";
-		case MotorStatus::RunningClockwise:
-			return "running_cw";
-		case MotorStatus::RunningCounterClockwise:
-			return "running_ccw";
-		case MotorStatus::EmergencyStop:
-			return "emergency_stop";
-		case MotorStatus::AlarmFault:
-			return "alarm_fault";
-		default:
-			return "unknown";
+	case MotorStatus::Idle:
+		return "idle";
+	case MotorStatus::RunningClockwise:
+		return "running_cw";
+	case MotorStatus::RunningCounterClockwise:
+		return "running_ccw";
+	case MotorStatus::EmergencyStop:
+		return "emergency_stop";
+	case MotorStatus::AlarmFault:
+		return "alarm_fault";
+	default:
+		return "unknown";
 	}
 }
 
 void updateStatusLed() {
 	switch (getMotorStatus()) {
-		case MotorStatus::EmergencyStop:
-			writeStatusLed(255, 0, 0);
-			break;
-		case MotorStatus::AlarmFault:
-			writeStatusLed(255, 96, 0);
-			break;
-		case MotorStatus::RunningClockwise:
-			writeStatusLed(0, 255, 0);
-			break;
-		case MotorStatus::RunningCounterClockwise:
-			writeStatusLed(0, 0, 255);
-			break;
-		case MotorStatus::Idle:
-		default:
-			if (gBluetoothConnected) {
-				writeStatusLed(0, 180, 180);
-			} else {
-				writeStatusLed(0, 0, 0);
-			}
-			break;
+	case MotorStatus::EmergencyStop:
+		writeStatusLed(255, 0, 0);
+		break;
+	case MotorStatus::AlarmFault:
+		writeStatusLed(255, 96, 0);
+		break;
+	case MotorStatus::RunningClockwise:
+	case MotorStatus::RunningCounterClockwise:
+		writeStatusLed(0, 255, 0);
+		break;
+	case MotorStatus::Idle:
+	default:
+		if (state.bluetoothConnected) writeStatusLed(0, 180, 180);
+		else writeStatusLed(180, 180, 0);
+
+		break;
 	}
 }
 
 uint32_t getSpeedPulseCount() {
 	noInterrupts();
-	uint32_t count = gSpeedPulseCount;
+	uint32_t count = state.speedPulseCount;
 	interrupts();
 	return count;
 }
 
 void resetSpeedPulseCount() {
 	noInterrupts();
-	gSpeedPulseCount = 0;
+	state.speedPulseCount = 0;
 	interrupts();
 }
 
@@ -237,31 +239,31 @@ float sampleSpeedRpm() {
 	uint32_t pulseCount = 0;
 
 	noInterrupts();
-	pulseCount = gSpeedPulseCount;
-	gSpeedPulseCount = 0;
+	pulseCount = state.speedPulseCount;
+	state.speedPulseCount = 0;
 	interrupts();
 
-	if (!gMotorRunning || gEmergencyLatched || gAlarmLatched) {
-		gLastMeasuredRpm = 0.0f;
-		return gLastMeasuredRpm;
+	if (!state.motorRunning || state.emergencyLatched || state.alarmLatched) {
+		state.lastMeasuredRpm = 0.0f;
+		return state.lastMeasuredRpm;
 	}
 
-	gLastMeasuredRpm = (static_cast<float>(pulseCount) * 60.0f) / static_cast<float>(getMotorPolePairs());
-	return gLastMeasuredRpm;
+	state.lastMeasuredRpm = (static_cast<float>(pulseCount) * 60.0f) / static_cast<float>(getMotorPolePairs());
+	return state.lastMeasuredRpm;
 }
 
 float getLastMeasuredSpeedRpm() {
-	return gLastMeasuredRpm;
+	return state.lastMeasuredRpm;
 }
 
 void IRAM_ATTR handleEmergencyInterrupt() {
-	gEmergencyInterruptPending = true;
+	state.emergencyInterruptPending = true;
 }
 
 void IRAM_ATTR handleAlarmInterrupt() {
-	gAlarmInterruptPending = true;
+	state.alarmInterruptPending = true;
 }
 
 void IRAM_ATTR handleSpeedInterrupt() {
-	++gSpeedPulseCount;
+	++state.speedPulseCount;
 }

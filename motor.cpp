@@ -2,7 +2,8 @@
 #include "config.h"
 #include "hardware.h"
 
-void setupPWM() {
+bool setupPWM() {
+  if (!isValidMotorPwmPin(config.pwmPin)) return false;
   mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, config.pwmPin);
 
   mcpwm_config_t pwm_config;
@@ -15,6 +16,8 @@ void setupPWM() {
   mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
   mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);
   mcpwm_stop(MCPWM_UNIT_0, MCPWM_TIMER_0);
+
+  return true;
 }
 
 bool startMotor() {
@@ -84,8 +87,14 @@ bool changePin(int pin) {
   const bool wasRunning = isMotorRunning();
   if (wasRunning) stopMotor();
 
+  int oldPin = config.pwmPin;
   config.pwmPin = pin;
-  setupPWM();
+  if (!setupPWM()) {
+    config.pwmPin = oldPin;
+    if (wasRunning && !isEmergencyLatched() && !isAlarmLatched()) startMotor();
+
+    return false;
+  }
   saveConfig();
 
   if (wasRunning && !isEmergencyLatched() && !isAlarmLatched()) startMotor();

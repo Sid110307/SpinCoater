@@ -37,7 +37,9 @@ String getJSONString() {
 	doc["freq"] = config.frequency;
 	doc["duty"] = config.dutyCycle;
 	doc["move"] = config.length;
+	doc["length_mm"] = config.length;
 	doc["pwmdur"] = config.duration;
+	doc["duration_ms"] = config.duration;
 	doc["pwmpin"] = config.pwmPin;
 	doc["status"] = motorStatusToString(getMotorStatus());
 	doc["direction"] = getMotorDirection() == MotorDirection::Clockwise ? "cw" : "ccw";

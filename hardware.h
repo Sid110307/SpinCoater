@@ -3,7 +3,6 @@
 #include <Arduino.h>
 
 #include "config.h"
-
 enum class MotorDirection : uint8_t {
 	Clockwise = 0,
 	CounterClockwise = 1,
@@ -40,6 +39,14 @@ void setAlarmLatched(bool latched);
 bool isAlarmLatched();
 void clearAlarmLatched();
 
+/**
+Emergency stop: red
+Alarm fault: orange
+Running clockwise: green
+Running counter-clockwise: blue
+Bluetooth connected (idle): cyan
+Idle: off
+*/
 void updateStatusLed();
 MotorStatus getMotorStatus();
 const char* motorStatusToString(MotorStatus status);

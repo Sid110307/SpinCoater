@@ -5,10 +5,15 @@
 void loadConfig() {
   prefs.begin("motor", true);
   if (prefs.isKey("cfg")) {
-    prefs.getBytes("cfg", &config, sizeof(config));
+    size_t read = prefs.getBytes("cfg", &config, sizeof(config));
     // if config params change, we need a version to keep track
-    if (config.version != CONFIG_VERSION || !isValidMotorPwmPin(config.pwmPin)) setDefaultConfig();
-  } else setDefaultConfig();
+    if (read != sizeof(config) || config.version != CONFIG_VERSION || !isValidMotorPwmPin(config.pwmPin)) {
+      // preference data corrupted or mismatched so clear and use defaults
+      prefs.clear();
+      setDefaultConfig();
+    }
+  }
+  else setDefaultConfig();
   prefs.end();
 }
 

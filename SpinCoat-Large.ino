@@ -1,6 +1,6 @@
 /**********************************************************************
-*   Motor Controller with Speed and Acceleration at Hardware Interrupt
-*   Ver: 0.95  Date: 21/5/26
+*   Spin Coater Motor Controller
+*   Ver: 0.96  Date: 16/6/26
 *   Authors: K. Bhaskar, Siddharth P Bharadwaj
 */
 
@@ -31,23 +31,32 @@ void IRAM_ATTR onTimer() {
 void setup() {
   loadConfig();
   setupHardware();
-  setupPWM();
+  Serial.begin(115200);
 
-  // Use timer 0, frequency 1MHz, count up
-  timer = timerBegin(0, 80, true);
-  timerAttachInterrupt(timer, &onTimer, true);
-  timerAlarmWrite(timer, TIMER_INTERVAL_US, true);
-  timerAlarmEnable(timer);
+  if (!setupPWM()) {
+    Serial.println("MCPWM init failed");
+    setAlarmLatched(true);
+  }
+
+  // Use timer frequency 1MHz, count up
+  timer = timerBegin(TIMER_FREQUENCY);
+  timerAttachInterrupt(timer, &onTimer);
+  timerAlarm(timer, TIMER_INTERVAL_US, true, 0);
 
   // Trigger on FALLING (HIGH to LOW) when button is pressed
   attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY), handleEmergencyInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(Pins::ALM), handleAlarmInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(Pins::SPEED), handleSpeedInterrupt, RISING);
 
-  BT.begin("SpinCoat");
-  BT.setPin("123456");
-  BT.println("Ready");
-  Serial.begin(115200);
+  if (!BT.begin("SpinCoat")) {
+    Serial.println("BT begin failed");
+    setBluetoothConnected(false);
+  }
+  else {
+    BT.setPin("123456", 6);
+    BT.println("Ready");
+  }
+
   Serial.println("Ready");
 }
 
@@ -55,27 +64,35 @@ void loop() {
   setBluetoothConnected(BT.hasClient());
   serviceHardware();
 
+  static bool btOverflow = false;
   while (BT.available() > 0) {
     char incoming = static_cast<char>(BT.read());
 
     if (incoming == '\r') continue;
     if (incoming == '\n') {
       bluetoothCommandBuffer[bluetoothCommandLength] = '\0';
-      String response = parse(String(bluetoothCommandBuffer));
-      BT.println(response);
+      if (btOverflow) {
+        BT.println("{\"error\":\"BUFFER_OVERFLOW\"}");
+      }
+      else {
+        String response = parse(String(bluetoothCommandBuffer));
+        BT.println(response);
+      }
       bluetoothCommandLength = 0;
+      btOverflow = false;
 
       continue;
     }
 
-    if (bluetoothCommandLength < COMMAND_BUFFER_SIZE - 1)
+    if (bluetoothCommandLength < COMMAND_BUFFER_SIZE - 1) {
       bluetoothCommandBuffer[bluetoothCommandLength++] = incoming;
-    else bluetoothCommandLength = 0;
+    }
+    else btOverflow = true;
   }
 
   if (sendTelemetry) {
     sampleSpeedRpm();
-    getPasses(BT);  // Reference to Stream object of BT
+    getPasses(BT);  // reference to Stream object of BT
     BT.println();
 
     sendTelemetry = false;

@@ -31,11 +31,13 @@ duty=<float>
   Example: duty=45.5
 
 move=<float>
+length_mm=<float>
   Move in mm.
   Range: >= 0
   Example: move=25
 
 pwmdur=<float>
+duration_ms=<float>
   Set PWM duration.
   Range: >= 0
   Example: pwmdur=500
