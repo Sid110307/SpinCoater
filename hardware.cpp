@@ -16,20 +16,28 @@ struct RuntimeState {
 	float lastMeasuredRpm = 0.0f;
 };
 
+static constexpr int LEDC_FREQ = 5000;
+static constexpr int LEDC_RESOLUTION = 8;
+
 static RuntimeState state;
 static unsigned long lastEmergencyMillis = 0;
 
 static void writeStatusLed(uint8_t red, uint8_t green, uint8_t blue) {
 	if (!state.statusLedReady) return;
 
-	digitalWrite(Pins::LED_R, red ? HIGH : LOW);
-	digitalWrite(Pins::LED_G, green ? HIGH : LOW);
-	digitalWrite(Pins::LED_B, blue ? HIGH : LOW);
+	ledcWrite(Pins::LED_R, red);
+	ledcWrite(Pins::LED_G, green);
+	ledcWrite(Pins::LED_B, blue);
 }
 
 static void initializeStatusLed() {
 	state.statusLedReady = true;
-	if (state.statusLedReady) writeStatusLed(0, 0, 0);
+
+	ledcAttach(Pins::LED_R, LEDC_FREQ, LEDC_RESOLUTION);
+	ledcAttach(Pins::LED_G, LEDC_FREQ, LEDC_RESOLUTION);
+	ledcAttach(Pins::LED_B, LEDC_FREQ, LEDC_RESOLUTION);
+
+	writeStatusLed(0, 0, 0);
 }
 
 bool isValidMotorPwmPin(int pin) {
@@ -55,15 +63,18 @@ void setupHardware() {
 	pinMode(Pins::DIR, OUTPUT);
 	digitalWrite(Pins::DIR, HIGH);
 
-	pinMode(Pins::LED_R, OUTPUT);
-	pinMode(Pins::LED_G, OUTPUT);
-	pinMode(Pins::LED_B, OUTPUT);
-
 	pinMode(Pins::ALM, INPUT_PULLUP);
 	pinMode(Pins::SPEED, INPUT_PULLUP);
 	pinMode(Pins::EMERGENCY, INPUT_PULLUP);
 
 	initializeStatusLed();
+	writeStatusLed(255, 0, 0);
+	delay(750);
+	writeStatusLed(0, 255, 0);
+	delay(750);
+	writeStatusLed(0, 0, 255);
+	delay(750);
+
 	updateStatusLed();
 }
 
@@ -206,17 +217,14 @@ void updateStatusLed() {
 	case MotorStatus::EmergencyStop:
 		writeStatusLed(255, 0, 0);
 		break;
-	case MotorStatus::AlarmFault:
-		writeStatusLed(255, 96, 0);
-		break;
 	case MotorStatus::RunningClockwise:
 	case MotorStatus::RunningCounterClockwise:
 		writeStatusLed(0, 255, 0);
 		break;
 	case MotorStatus::Idle:
 	default:
-		if (state.bluetoothConnected) writeStatusLed(0, 180, 180);
-		else writeStatusLed(180, 180, 0);
+		if (state.bluetoothConnected) writeStatusLed(0, 192, 192);
+		else writeStatusLed(255, 32, 0);
 
 		break;
 	}

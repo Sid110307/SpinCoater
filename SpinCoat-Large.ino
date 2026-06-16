@@ -1,6 +1,6 @@
 /**********************************************************************
 *   Spin Coater Motor Controller
-*   Ver: 0.96  Date: 16/6/26
+*   Ver: 0.97  Date: 16/6/26
 *   Authors: K. Bhaskar, Siddharth P Bharadwaj
 */
 
