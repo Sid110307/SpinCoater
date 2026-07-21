@@ -54,15 +54,6 @@ bool isValidMotorPwmPin(int pin) {
 }
 
 void setupHardware() {
-	pinMode(Pins::EN, OUTPUT);
-	digitalWrite(Pins::EN, HIGH);
-
-	pinMode(Pins::BRK, OUTPUT);
-	digitalWrite(Pins::BRK, HIGH);
-
-	pinMode(Pins::DIR, OUTPUT);
-	digitalWrite(Pins::DIR, HIGH);
-
 	pinMode(Pins::ALM, INPUT_PULLUP);
 	pinMode(Pins::SPEED, INPUT_PULLUP);
 	pinMode(Pins::EMERGENCY, INPUT_PULLUP);
@@ -97,10 +88,7 @@ void serviceHardware() {
 		}
 	}
 
-	if (alarmPending) {
-		setAlarmLatched(true);
-	}
-
+	if (alarmPending) setAlarmLatched(true);
 	updateStatusLed();
 }
 
@@ -117,7 +105,6 @@ bool isBluetoothConnected() {
 
 void setMotorDirection(MotorDirection direction) {
 	state.motorDirection = direction;
-	digitalWrite(Pins::DIR, direction == MotorDirection::Clockwise ? HIGH : LOW);
 	updateStatusLed();
 }
 
@@ -127,12 +114,6 @@ MotorDirection getMotorDirection() {
 
 void applyMotorRunState(bool running) {
 	state.motorRunning = running;
-
-	// The EN pin drives a 2N2222 stage, so the MCU signal is intentionally
-	// inverted from the downstream motor-driver enable behavior
-	digitalWrite(Pins::EN, running ? LOW : HIGH);
-	digitalWrite(Pins::BRK, running ? LOW : HIGH);
-
 	updateStatusLed();
 }
 
@@ -141,9 +122,7 @@ bool isMotorRunning() {
 }
 
 void setMotorPolePairs(int polePairs) {
-	if (polePairs > 0) {
-		config.polePairs = polePairs;
-	}
+	if (polePairs > 0) config.polePairs = polePairs;
 }
 
 int getMotorPolePairs() {
@@ -234,6 +213,7 @@ uint32_t getSpeedPulseCount() {
 	noInterrupts();
 	uint32_t count = state.speedPulseCount;
 	interrupts();
+
 	return count;
 }
 

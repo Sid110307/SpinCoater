@@ -1,6 +1,7 @@
 #include "commands.h"
 #include "io.h"
 #include "motor.h"
+#include "modbus.h"
 #include "globals.h"
 
 #include <cstdlib>
@@ -44,6 +45,7 @@ String parse(String input) {
     else if (input.equalsIgnoreCase("clearfault")) {
       clearEmergencyLatched();
       clearAlarmLatched();
+      modbusClearFault();
       stopMotor();
 
       return RESP_OK;

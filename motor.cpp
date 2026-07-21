@@ -1,38 +1,59 @@
 #include "motor.h"
+
 #include "config.h"
 #include "hardware.h"
+#include "modbus.h"
 
-bool setupPWM() {
-  if (!isValidMotorPwmPin(config.pwmPin)) return false;
-  mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, config.pwmPin);
+static bool preferClosedLoop = false;
 
-  mcpwm_config_t pwm_config;
-  pwm_config.frequency = config.frequency;  // Frequency in Hz
-  pwm_config.cmpr_a = config.dutyCycle;     // Initial duty cycle
-  pwm_config.cmpr_b = 0;                    // Not used for Generator A
-  pwm_config.counter_mode = MCPWM_UP_COUNTER;
-  pwm_config.duty_mode = MCPWM_DUTY_MODE_0;  // Active High
+static uint16_t clampClosedLoopRpm(int rpm) {
+  if (rpm < 200) return 200;
+  if (rpm > 4000) return 4000;
+  return static_cast<uint16_t>(rpm);
+}
 
-  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);
-  mcpwm_stop(MCPWM_UNIT_0, MCPWM_TIMER_0);
+static uint8_t clampOpenLoopPercent(float percent) {
+  if (percent < 10.0f) return 10;
+  if (percent > 100.0f) return 100;
+  return static_cast<uint8_t>(percent);
+}
+
+static uint16_t clampAccelTime(float ms) {
+  if (ms < 0.0f) return 0;
+  if (ms > 65535.0f) return 65535;
+  return static_cast<uint16_t>(ms);
+}
+
+static bool applyMotorProfile(bool running) {
+  if (!modbusUseCommunicationControl()) return false;
+  if (!modbusSetControlMode(preferClosedLoop)) return false;
+  if (!modbusSetDirection(getMotorDirection() == MotorDirection::Clockwise)) return false;
+  if (!modbusSetAccelTimeMs(clampAccelTime(config.duration))) return false;
+
+  if (preferClosedLoop) {
+    if (!modbusSetClosedLoopRpm(clampClosedLoopRpm(config.frequency))) return false;
+  }
+  else {
+    if (!modbusSetOpenLoopSpeedPercent(clampOpenLoopPercent(config.dutyCycle))) return false;
+  }
+
+  if (!modbusSetBrake(false)) return false;
+  if (!modbusSetRun(running)) return false;
 
   return true;
 }
 
 bool startMotor() {
   if (isEmergencyLatched() || isAlarmLatched()) return false;
+  if (!applyMotorProfile(true)) return false;
 
   applyMotorRunState(true);
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, config.dutyCycle);
-  mcpwm_start(MCPWM_UNIT_0, MCPWM_TIMER_0);
-
   return true;
 }
 
 void stopMotor() {
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, 0);
-  mcpwm_stop(MCPWM_UNIT_0, MCPWM_TIMER_0);
+  modbusSetRun(false);
+  modbusSetBrake(false);
   applyMotorRunState(false);
 }
 
@@ -41,10 +62,13 @@ bool changeFreq(int freq) {
   if (freq <= 0 || freq > MAX_FREQ) return false;
 
   config.frequency = freq;
-  mcpwm_set_frequency(MCPWM_UNIT_0, MCPWM_TIMER_0, freq);
-  // Duty cycle also resets when frequency changes
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, config.dutyCycle);
+  preferClosedLoop = true;
   saveConfig();
+
+  if (isMotorRunning()) {
+    if (!modbusSetControlMode(true)) return false;
+    if (!modbusSetClosedLoopRpm(clampClosedLoopRpm(freq))) return false;
+  }
 
   return true;
 }
@@ -54,8 +78,13 @@ bool changeDuty(float duty) {
   if (duty < 0 || duty > 100) return false;
 
   config.dutyCycle = duty;
-  mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, duty);
+  preferClosedLoop = false;
   saveConfig();
+
+  if (isMotorRunning()) {
+    if (!modbusSetControlMode(false)) return false;
+    if (!modbusSetOpenLoopSpeedPercent(clampOpenLoopPercent(duty))) return false;
+  }
 
   return true;
 }
@@ -77,6 +106,10 @@ bool changeDur(float dur) {
   config.duration = dur;
   saveConfig();
 
+  if (isMotorRunning()) {
+    if (!modbusSetAccelTimeMs(clampAccelTime(dur))) return false;
+  }
+
   return true;
 }
 
@@ -84,20 +117,9 @@ bool changePin(int pin) {
   if (config.pwmPin == pin) return true;
   if (!isValidMotorPwmPin(pin)) return false;
 
-  const bool wasRunning = isMotorRunning();
-  if (wasRunning) stopMotor();
-
-  int oldPin = config.pwmPin;
   config.pwmPin = pin;
-  if (!setupPWM()) {
-    config.pwmPin = oldPin;
-    if (wasRunning && !isEmergencyLatched() && !isAlarmLatched()) startMotor();
-
-    return false;
-  }
   saveConfig();
 
-  if (wasRunning && !isEmergencyLatched() && !isAlarmLatched()) startMotor();
   return true;
 }
 

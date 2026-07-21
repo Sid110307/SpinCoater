@@ -1,5 +1,6 @@
 #include "io.h"
 #include "globals.h"
+#include "modbus.h"
 
 static void addPinMap(JsonObject pins) {
 	pins["pwm"] = Pins::PWM;
@@ -33,6 +34,17 @@ void getPasses(Stream& stream) {
 
 String getJSONString() {
 	JsonDocument doc;
+	uint16_t motorVoltage = 0;
+	uint16_t motorCurrent = 0;
+	uint16_t motorPower = 0;
+	uint16_t motorSpeed = 0;
+	uint16_t motorFault = 0;
+
+	modbusReadVoltage(motorVoltage);
+	modbusReadCurrent(motorCurrent);
+	modbusReadPower(motorPower);
+	modbusReadSpeed(motorSpeed);
+	modbusReadFault(motorFault);
 
 	doc["freq"] = config.frequency;
 	doc["duty"] = config.dutyCycle;
@@ -50,6 +62,11 @@ String getJSONString() {
 	doc["pole_pairs"] = getMotorPolePairs();
 	doc["speed_pulses"] = getSpeedPulseCount();
 	doc["speed_rpm"] = getLastMeasuredSpeedRpm();
+	doc["motor_voltage"] = motorVoltage;
+	doc["motor_current"] = static_cast<float>(motorCurrent) / 100.0f;
+	doc["motor_power"] = static_cast<float>(motorPower) / 10.0f;
+	doc["motor_speed"] = motorSpeed;
+	doc["motor_fault"] = motorFault;
 
 	addPinMap(doc["pins"].to<JsonObject>());
 	getPasses(doc["passes"].to<JsonArray>());

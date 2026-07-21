@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
-
 #include "config.h"
+
 enum class MotorDirection : uint8_t {
 	Clockwise = 0,
 	CounterClockwise = 1,

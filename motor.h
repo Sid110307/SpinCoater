@@ -1,9 +1,7 @@
 #pragma once
 
-#include <driver/mcpwm.h>
 #include "config.h"
 
-bool setupPWM();
 bool startMotor();
 void stopMotor();
 

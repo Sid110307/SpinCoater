@@ -1,6 +1,6 @@
 /**********************************************************************
 *   Spin Coater Motor Controller
-*   Ver: 0.97  Date: 16/6/26
+*   Ver: 0.98  Date: 21/7/26
 *   Authors: K. Bhaskar, Siddharth P Bharadwaj
 */
 
@@ -9,6 +9,7 @@
 #include "globals.h"
 #include "config.h"
 #include "motor.h"
+#include "modbus.h"
 #include "io.h"
 #include "commands.h"
 #include "hardware.h"
@@ -33,8 +34,8 @@ void setup() {
   setupHardware();
   Serial.begin(115200);
 
-  if (!setupPWM()) {
-    Serial.println("MCPWM init failed");
+  if (!modbusBegin()) {
+    Serial.println("Modbus init failed");
     setAlarmLatched(true);
   }
 
