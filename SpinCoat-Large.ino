@@ -1,6 +1,6 @@
 /**********************************************************************
 *   Spin Coater Motor Controller
-*   Ver: 0.98  Date: 21/7/26
+*   Ver: 0.99 | Date: 24/7/26
 *   Authors: K. Bhaskar, Siddharth P Bharadwaj
 */
 
@@ -52,8 +52,7 @@ void setup() {
   if (!BT.begin("SpinCoat")) {
     Serial.println("BT begin failed");
     setBluetoothConnected(false);
-  }
-  else {
+  } else {
     BT.setPin("123456", 6);
     BT.println("Ready");
   }
@@ -74,8 +73,7 @@ void loop() {
       bluetoothCommandBuffer[bluetoothCommandLength] = '\0';
       if (btOverflow) {
         BT.println("{\"error\":\"BUFFER_OVERFLOW\"}");
-      }
-      else {
+      } else {
         String response = parse(String(bluetoothCommandBuffer));
         BT.println(response);
       }
@@ -87,8 +85,7 @@ void loop() {
 
     if (bluetoothCommandLength < COMMAND_BUFFER_SIZE - 1) {
       bluetoothCommandBuffer[bluetoothCommandLength++] = incoming;
-    }
-    else btOverflow = true;
+    } else btOverflow = true;
   }
 
   if (sendTelemetry) {

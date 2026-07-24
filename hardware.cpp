@@ -42,14 +42,14 @@ static void initializeStatusLed() {
 
 bool isValidMotorPwmPin(int pin) {
 	switch (pin) {
-	case 13:
-	case 16:
-	case 17:
-	case 22:
-	case 32:
-		return true;
-	default:
-		return false;
+		case 13:
+		case 16:
+		case 17:
+		case 22:
+		case 32:
+			return true;
+		default:
+			return false;
 	}
 }
 
@@ -176,36 +176,36 @@ MotorStatus getMotorStatus() {
 
 const char* motorStatusToString(MotorStatus status) {
 	switch (status) {
-	case MotorStatus::Idle:
-		return "idle";
-	case MotorStatus::RunningClockwise:
-		return "running_cw";
-	case MotorStatus::RunningCounterClockwise:
-		return "running_ccw";
-	case MotorStatus::EmergencyStop:
-		return "emergency_stop";
-	case MotorStatus::AlarmFault:
-		return "alarm_fault";
-	default:
-		return "unknown";
+		case MotorStatus::Idle:
+			return "idle";
+		case MotorStatus::RunningClockwise:
+			return "running_cw";
+		case MotorStatus::RunningCounterClockwise:
+			return "running_ccw";
+		case MotorStatus::EmergencyStop:
+			return "emergency_stop";
+		case MotorStatus::AlarmFault:
+			return "alarm_fault";
+		default:
+			return "unknown";
 	}
 }
 
 void updateStatusLed() {
 	switch (getMotorStatus()) {
-	case MotorStatus::EmergencyStop:
-		writeStatusLed(255, 0, 0);
-		break;
-	case MotorStatus::RunningClockwise:
-	case MotorStatus::RunningCounterClockwise:
-		writeStatusLed(0, 255, 0);
-		break;
-	case MotorStatus::Idle:
-	default:
-		if (state.bluetoothConnected) writeStatusLed(0, 192, 192);
-		else writeStatusLed(255, 32, 0);
+		case MotorStatus::EmergencyStop:
+			writeStatusLed(255, 0, 0);
+			break;
+		case MotorStatus::RunningClockwise:
+		case MotorStatus::RunningCounterClockwise:
+			writeStatusLed(0, 255, 0);
+			break;
+		case MotorStatus::Idle:
+		default:
+			if (state.bluetoothConnected) writeStatusLed(0, 192, 192);
+			else writeStatusLed(255, 32, 0);
 
-		break;
+			break;
 	}
 }
 

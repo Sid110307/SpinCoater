@@ -19,8 +19,7 @@ static uint16_t crc16(const uint8_t* data, size_t length) {
 			if (crc & 0x0001) {
 				crc >>= 1;
 				crc ^= 0xA001;
-			}
-			else crc >>= 1;
+			} else crc >>= 1;
 		}
 	}
 
@@ -41,7 +40,7 @@ static void clearRxBuffer() {
 	while (ModbusSerial.available() > 0) ModbusSerial.read();
 }
 
-static bool transact(const uint8_t* request, size_t requestLength, uint8_t* response, size_t responseCapacity, size_t& responseLength) {
+static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, size_t responseCapacity, size_t& responseLength) {
 	if (!modbusReady) return false;
 
 	clearRxBuffer();
@@ -51,7 +50,7 @@ static bool transact(const uint8_t* request, size_t requestLength, uint8_t* resp
 	ModbusSerial.write(request, requestLength);
 	ModbusSerial.flush();
 
-	delayMicroseconds(20);
+	delayMicroseconds(MODBUS_RESPONSE_TIMEOUT_MS);
 	digitalWrite(Pins::RS485_DE_RE, LOW);
 
 	responseLength = 0;
@@ -70,10 +69,23 @@ static bool transact(const uint8_t* request, size_t requestLength, uint8_t* resp
 		if (responseLength > 0 && (millis() - lastByte) >= MODBUS_FRAME_GAP_MS) break;
 		delay(1);
 	}
+
+	Serial.print("TX: ");
+	for (size_t i = 0; i < requestLength; i++) {
+		if (request[i] < 0x10) Serial.print('0');
+		Serial.print(request[i], HEX);
+		Serial.print(' ');
+	}
+	Serial.println();
+
+	Serial.printf("RX (%u): ", responseLength);
+	for (size_t i = 0; i < responseLength; i++) {
+		Serial.printf("%02X ", response[i]);
+	}
+	Serial.println();
 	if (responseLength < 5) return false;
 
-	uint16_t receivedCrc = static_cast<uint16_t>(response[responseLength - 2]) |
-		(static_cast<uint16_t>(response[responseLength - 1]) << 8);
+	uint16_t receivedCrc = static_cast<uint16_t>(response[responseLength - 2]) | (static_cast<uint16_t>(response[responseLength - 1]) << 8);
 	uint16_t calculatedCrc = crc16(response, responseLength - 2);
 
 	return receivedCrc == calculatedCrc;
@@ -93,7 +105,7 @@ static bool writeRegisterInternal(uint16_t reg, uint16_t value) {
 	uint8_t response[16];
 	size_t responseLength = 0;
 
-	if (!transact(request, requestLength, response, sizeof(response), responseLength)) return false;
+	if (!tx(request, requestLength, response, sizeof(response), responseLength)) return false;
 	if (responseLength < 8) return false;
 	if (response[0] != modbusSlaveAddress || response[1] != 0x06) return false;
 
@@ -114,7 +126,7 @@ static bool readRegisterInternal(uint16_t reg, uint16_t& value) {
 	uint8_t response[16];
 	size_t responseLength = 0;
 
-	if (!transact(request, requestLength, response, sizeof(response), responseLength)) return false;
+	if (!tx(request, requestLength, response, sizeof(response), responseLength)) return false;
 	if (responseLength < 7) return false;
 	if (response[0] != modbusSlaveAddress) return false;
 	if (response[1] == (0x03 | 0x80)) return false;

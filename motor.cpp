@@ -13,14 +13,14 @@ static uint16_t clampClosedLoopRpm(int rpm) {
 }
 
 static uint8_t clampOpenLoopPercent(float percent) {
-  if (percent < 10.0f) return 10;
-  if (percent > 100.0f) return 100;
-  return static_cast<uint8_t>(percent);
+  if (percent < 10.0f) return 100;
+  if (percent > 100.0f) return 1000;
+  return static_cast<uint8_t>(percent * 10);
 }
 
 static uint16_t clampAccelTime(float ms) {
-  if (ms < 0.0f) return 0;
-  if (ms > 65535.0f) return 65535;
+  if (ms < 300.0f) return 300;
+  if (ms > 15000.0f) return 15000;
   return static_cast<uint16_t>(ms);
 }
 
@@ -32,8 +32,7 @@ static bool applyMotorProfile(bool running) {
 
   if (preferClosedLoop) {
     if (!modbusSetClosedLoopRpm(clampClosedLoopRpm(config.frequency))) return false;
-  }
-  else {
+  } else {
     if (!modbusSetOpenLoopSpeedPercent(clampOpenLoopPercent(config.dutyCycle))) return false;
   }
 

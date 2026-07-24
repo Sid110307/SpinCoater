@@ -30,19 +30,15 @@ String parse(String input) {
     if (input.equalsIgnoreCase("start")) {
       if (!startMotor()) return makeError("SAFETY_LOCKED");
       return RESP_OK;
-    }
-    else if (input.equalsIgnoreCase("stop")) {
+    } else if (input.equalsIgnoreCase("stop")) {
       stopMotor();
       return RESP_OK;
-    }
-    else if (input.equalsIgnoreCase("status")) {
+    } else if (input.equalsIgnoreCase("status")) {
       return printJSON();
-    }
-    else if (input.equalsIgnoreCase("estop")) {
+    } else if (input.equalsIgnoreCase("estop")) {
       setEmergencyLatched(true);
       return RESP_OK;
-    }
-    else if (input.equalsIgnoreCase("clearfault")) {
+    } else if (input.equalsIgnoreCase("clearfault")) {
       clearEmergencyLatched();
       clearAlarmLatched();
       modbusClearFault();
@@ -70,8 +66,7 @@ String parse(String input) {
 
     if (!changeFreq(freq)) return makeError("INVALID_VALUE", "freq");
     return RESP_OK;
-  }
-  else if (command.equalsIgnoreCase("duty")) {
+  } else if (command.equalsIgnoreCase("duty")) {
     char* endptr = nullptr;
     double d = strtod(value.c_str(), &endptr);
     if (endptr == value.c_str()) return makeError("INVALID_VALUE", "duty");
@@ -82,8 +77,7 @@ String parse(String input) {
 
     if (!changeDuty(duty)) return makeError("INVALID_VALUE", "duty");
     return RESP_OK;
-  }
-  else if (command.equalsIgnoreCase("move") || command.equalsIgnoreCase("length_mm")) {
+  } else if (command.equalsIgnoreCase("move") || command.equalsIgnoreCase("length_mm")) {
     char* endptr = nullptr;
     double d = strtod(value.c_str(), &endptr);
     if (endptr == value.c_str()) return makeError("INVALID_VALUE", "move");
@@ -94,8 +88,7 @@ String parse(String input) {
 
     if (!changeLen(len)) return makeError("INVALID_VALUE", "move");
     return RESP_OK;
-  }
-  else if (command.equalsIgnoreCase("pwmdur") || command.equalsIgnoreCase("duration_ms")) {
+  } else if (command.equalsIgnoreCase("pwmdur") || command.equalsIgnoreCase("duration_ms")) {
     char* endptr = nullptr;
     double d = strtod(value.c_str(), &endptr);
     if (endptr == value.c_str()) return makeError("INVALID_VALUE", "pwmdur");
@@ -106,8 +99,7 @@ String parse(String input) {
 
     if (!changeDur(dur)) return makeError("INVALID_VALUE", "pwmdur");
     return RESP_OK;
-  }
-  else if (command.equalsIgnoreCase("pwmpin")) {
+  } else if (command.equalsIgnoreCase("pwmpin")) {
     int pin = value.toInt();
     char* endptr = nullptr;
     long v = strtol(value.c_str(), &endptr, 10);
@@ -119,22 +111,19 @@ String parse(String input) {
 
     if (!changePin(pin)) return makeError("INVALID_VALUE", "pwmpin");
     return RESP_OK;
-  }
-  else if (command.equalsIgnoreCase("dir")) {
+  } else if (command.equalsIgnoreCase("dir")) {
     if (value.equalsIgnoreCase("1") || value.equalsIgnoreCase("cw") || value.equalsIgnoreCase("clockwise")) {
       if (isMotorRunning()) stopMotor();
       setMotorDirection(MotorDirection::Clockwise);
       return RESP_OK;
-    }
-    else if (value.equalsIgnoreCase("0") || value.equalsIgnoreCase("ccw") || value.equalsIgnoreCase("counterclockwise")) {
+    } else if (value.equalsIgnoreCase("0") || value.equalsIgnoreCase("ccw") || value.equalsIgnoreCase("counterclockwise")) {
       if (isMotorRunning()) stopMotor();
       setMotorDirection(MotorDirection::CounterClockwise);
       return RESP_OK;
     }
 
     return makeError("INVALID_VALUE", "dir");
-  }
-  else if (command.equalsIgnoreCase("polepairs")) {
+  } else if (command.equalsIgnoreCase("polepairs")) {
     int polePairs = value.toInt();
     char* endptr = nullptr;
     long v = strtol(value.c_str(), &endptr, 10);
@@ -149,8 +138,7 @@ String parse(String input) {
     saveConfig();
 
     return RESP_OK;
-  }
-  else if (command.equalsIgnoreCase("addpass")) {
+  } else if (command.equalsIgnoreCase("addpass")) {
     int first = value.indexOf(',');
     int second = value.indexOf(',', first + 1);
     if (first == -1 || second == -1) return makeError("INVALID_VALUE", "addpass");
@@ -181,6 +169,5 @@ String parse(String input) {
 
     if (!addPass(rpm, accel, delay)) return makeError("INVALID_VALUE", "addpass");
     return RESP_OK;
-  }
-  else return makeError("INVALID_CMD");
+  } else return makeError("INVALID_CMD");
 }
