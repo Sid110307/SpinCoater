@@ -1,9 +1,6 @@
 package com.sid.spincoater.core
 
-import org.json.JSONArray
 import org.json.JSONObject
-
-data class DevicePass(val rpm: Double, val accel: Double, val delayMs: Double)
 
 val motorFaultMap = mapOf(
     2 to "Motor overloaded",
@@ -16,19 +13,38 @@ val motorFaultMap = mapOf(
     9 to "Overheating",
 )
 
+enum class ControlMode {
+    OpenLoop, ClosedLoop, Unknown;
+
+    val label: String
+        get() = when (this) {
+            OpenLoop -> "Open loop"
+            ClosedLoop -> "Closed loop"
+            Unknown -> "Unknown"
+        }
+
+    companion object {
+        fun parse(s: String?) = when (s?.lowercase()) {
+            "open_loop", "openloop", "0" -> OpenLoop
+            "closed_loop", "closedloop", "1" -> ClosedLoop
+            else -> Unknown
+        }
+    }
+}
+
 data class DeviceStatus(
     val rpmTarget: Int = 0,
-    val duty: Double = 0.0,
-    val lengthMm: Double = 0.0,
-    val accelMs: Double = 0.0,
-    val pwmPin: Int = 13,
+    val openLoopRaw: Int = 0,
+    val controlMode: ControlMode = ControlMode.Unknown,
+    val accelMs: Int = 0,
     val status: String = "unknown",
     val direction: String = "cw",
     val running: Boolean = false,
     val emergency: Boolean = false,
     val alarm: Boolean = false,
     val btConnected: Boolean = false,
-    val polePairs: Int = 4,
+    val speedPulsesPerRevolution: Int = 4,
+    val modbusAddress: Int = 1,
     val speedPulses: Long = 0,
     val speedRpm: Double = 0.0,
     val motorVoltage: Int = 0,
@@ -36,7 +52,6 @@ data class DeviceStatus(
     val motorPower: Double = 0.0,
     val motorSpeed: Int = 0,
     val motorFault: Int = 0,
-    val passes: List<DevicePass> = emptyList(),
     val receivedAt: Long = System.currentTimeMillis()
 ) {
     val clockwise: Boolean get() = direction.equals("cw", true)
@@ -56,32 +71,19 @@ data class DeviceStatus(
     companion object {
         fun fromJson(json: JSONObject): DeviceStatus? {
             if (!json.has("status") || !json.has("running")) return null
-
-            val passes = mutableListOf<DevicePass>()
-            (json.optJSONArray("passes") ?: JSONArray()).let { arr ->
-                for (i in 0 until arr.length()) {
-                    val p = arr.optJSONObject(i) ?: continue
-                    passes += DevicePass(
-                        rpm = p.optDouble("rpm", 0.0),
-                        accel = p.optDouble("accel", 0.0),
-                        delayMs = p.optDouble("delay", 0.0)
-                    )
-                }
-            }
-
             return DeviceStatus(
-                rpmTarget = json.optInt("freq", 0),
-                duty = json.optDouble("duty", 0.0),
-                lengthMm = json.optDouble("length_mm", json.optDouble("move", 0.0)),
-                accelMs = json.optDouble("duration_ms", json.optDouble("pwmdur", 0.0)),
-                pwmPin = json.optInt("pwmpin", 13),
+                rpmTarget = json.optInt("target_rpm", 0),
+                openLoopRaw = json.optInt("open_loop_raw", 0),
+                controlMode = ControlMode.parse(json.optString("control_mode")),
+                accelMs = json.optInt("accel_ms", 0),
                 status = json.optString("status", "unknown"),
                 direction = json.optString("direction", "cw"),
                 running = json.optBoolean("running", false),
                 emergency = json.optBoolean("emergency", false),
                 alarm = json.optBoolean("alarm", false),
                 btConnected = json.optBoolean("bt_connected", false),
-                polePairs = json.optInt("pole_pairs", 4),
+                speedPulsesPerRevolution = json.optInt("speed_pulses_per_revolution", 4),
+                modbusAddress = json.optInt("modbus_address", 1),
                 speedPulses = json.optLong("speed_pulses", 0L),
                 speedRpm = json.optDouble("speed_rpm", 0.0),
                 motorVoltage = json.optInt("motor_voltage", 0),
@@ -89,21 +91,8 @@ data class DeviceStatus(
                 motorPower = json.optDouble("motor_power", 0.0),
                 motorSpeed = json.optInt("motor_speed", 0),
                 motorFault = json.optInt("motor_fault", 0),
-                passes = passes
+                receivedAt = System.currentTimeMillis()
             )
-        }
-
-        fun passesFromTelemetry(arr: JSONArray): List<DevicePass> = buildList {
-            for (i in 0 until arr.length()) {
-                val p = arr.optJSONObject(i) ?: continue
-                add(
-                    DevicePass(
-                        rpm = p.optDouble("rpm", 0.0),
-                        accel = p.optDouble("accel", 0.0),
-                        delayMs = p.optDouble("delay", 0.0)
-                    )
-                )
-            }
         }
     }
 }

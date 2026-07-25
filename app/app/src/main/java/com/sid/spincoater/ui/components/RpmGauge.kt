@@ -39,9 +39,9 @@ fun RpmGauge(
     val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
     val tick = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
 
-    val target = (rpm / maxRpm.toDouble()).coerceIn(0.0, 1.0).toFloat()
+    val progress = (rpm / maxRpm.toDouble()).coerceIn(0.0, 1.0).toFloat()
     val animated by animateFloatAsState(
-        targetValue = target, animationSpec = tween(400), label = "rpm"
+        targetValue = progress, animationSpec = tween(400), label = "rpm"
     )
 
     val startAngle = 135f

@@ -168,10 +168,9 @@ private fun DeviceRow(
                     )
                 }
                 Text(
-                    buildString {
-                        append(dev.address)
-                        append(", ${dev.rssi} dBm")
-                    }, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace
+                    dev.address,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace
                 )
             }
             Spacer(Modifier.width(12.dp))

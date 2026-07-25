@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -23,9 +21,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -34,9 +29,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.sid.spincoater.R
 import com.sid.spincoater.core.ConnState
-import com.sid.spincoater.core.DevicePass
-import com.sid.spincoater.core.Protocol
-import com.sid.spincoater.ui.components.CollapsibleCard
 import com.sid.spincoater.ui.components.NumberField
 import com.sid.spincoater.viewmodel.MainViewModel
 
@@ -49,9 +41,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     val pollMs by vm.pollIntervalMs.collectAsState()
     val confirmStart by vm.confirmBeforeStart.collectAsState()
     val keepScreenOn by vm.keepScreenOn.collectAsState()
-
     val connected = connState == ConnState.Connected
-    var expanded by remember { mutableStateOf(false) }
 
     Scaffold(topBar = {
         TopAppBar(title = { Text("Settings") }, navigationIcon = {
@@ -110,61 +100,22 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     ) {
                         Text("Device configuration", style = MaterialTheme.typography.titleMedium)
                         NumberField(
-                            label = "Sensor pole pairs",
-                            value = status?.polePairs ?: 4,
-                            onCommit = { vm.setPolePairs(it) },
-                            range = 1..64,
-                            suffix = "pairs",
-                            supporting = "Number of pole pairs in the motor."
+                            label = "Hall pulses per revolution",
+                            value = status?.speedPulsesPerRevolution ?: 4,
+                            onCommit = { vm.setSpeedPulsesPerRevolution(it) },
+                            range = 1..65535,
+                            suffix = "pulses",
+                            supporting = "Number of hall pulses per revolution of the motor."
                         )
-
-                        Text("PWM output pin", style = MaterialTheme.typography.labelLarge)
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                "Pin ${status?.pwmPin ?: 13}",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            IconButton(onClick = { expanded = true }) {
-                                Icon(
-                                    painterResource(R.drawable.expand_more),
-                                    contentDescription = "Select pin",
-                                    modifier = Modifier.height(24.dp)
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = expanded, onDismissRequest = { expanded = false }) {
-                                Protocol.VALID_PWM_PINS.forEach { pin ->
-                                    DropdownMenuItem(text = { Text("Pin $pin") }, onClick = {
-                                        vm.setPwmPin(pin)
-                                        expanded = false
-                                    })
-                                }
-                            }
-                        }
+                        InfoRow(
+                            label = "Control mode",
+                            value = status?.controlMode?.label ?: "Unknown"
+                        )
+                        InfoRow(
+                            label = "Modbus address",
+                            value = status?.modbusAddress?.toString() ?: "Unknown"
+                        )
                     }
-                }
-            }
-            CollapsibleCard(
-                modifier = Modifier.fillMaxWidth(), key = "device_passes", title = {
-                    Text("Passes", style = MaterialTheme.typography.titleMedium)
-                }) {
-                val passes = status?.passes.orEmpty()
-                if (passes.isEmpty()) Text(
-                    "No passes.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                else passes.forEachIndexed { i, p ->
-                    val pass = DevicePass(
-                        rpm = p.rpm / 10.0, accel = p.accel / 10.0, delayMs = p.delayMs
-                    )
-                    InfoRow(
-                        label = "Pass ${i + 1}",
-                        value = "${pass.rpm} RPM, ${pass.accel} RPM/s, ${pass.delayMs} ms"
-                    )
                 }
             }
         }

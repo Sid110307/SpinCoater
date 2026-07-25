@@ -47,20 +47,18 @@ import com.sid.spincoater.viewmodel.MainViewModel
 private data class DraftStep(
     val rpm: String = "1500",
     val accelMs: String = "1000",
-    val dwellMs: String = "30000",
+    val holdMs: String = "30000",
     val clockwise: Boolean = true
 )
 
 private fun stepError(step: DraftStep): String? {
     val rpm = step.rpm.toIntOrNull() ?: return "Speed must be a number"
     val accel = step.accelMs.toIntOrNull() ?: return "Ramp must be a number"
-    val dwell = step.dwellMs.toIntOrNull() ?: return "Hold must be a number"
+    val hold = step.holdMs.toIntOrNull() ?: return "Hold must be a number"
 
-    if (rpm !in Protocol.MIN_RPM..Protocol.MAX_RPM)
-        return "Speed must be ${Protocol.MIN_RPM}-${Protocol.MAX_RPM} rpm"
-    if (accel !in Protocol.MIN_ACCEL_MS..Protocol.MAX_ACCEL_MS)
-        return "Ramp must be ${Protocol.MIN_ACCEL_MS}-${Protocol.MAX_ACCEL_MS} ms"
-    if (dwell < 0) return "Hold cannot be negative"
+    if (rpm !in Protocol.MIN_RPM..Protocol.MAX_RPM) return "Speed must be ${Protocol.MIN_RPM}-${Protocol.MAX_RPM} rpm"
+    if (accel !in Protocol.MIN_ACCEL_MS..Protocol.MAX_ACCEL_MS) return "Ramp must be ${Protocol.MIN_ACCEL_MS}-${Protocol.MAX_ACCEL_MS}ms"
+    if (hold < 0) return "Hold cannot be negative"
 
     return null
 }
@@ -83,7 +81,7 @@ fun EditScreen(vm: MainViewModel, existing: Recipe?, onClose: () -> Unit) {
         if (!loaded.isNullOrEmpty()) {
             loaded.forEach {
                 steps += DraftStep(
-                    it.rpm.toString(), it.accelMs.toString(), it.dwellMs.toString(), it.clockwise
+                    it.rpm.toString(), it.accelMs.toString(), it.holdMs.toString(), it.clockwise
                 )
             }
         } else steps += DraftStep()
@@ -91,7 +89,11 @@ fun EditScreen(vm: MainViewModel, existing: Recipe?, onClose: () -> Unit) {
         seeded = true
     }
 
-    val canSave = name.isNotBlank() && steps.isNotEmpty() && steps.all { stepError(it) == null }
+    val canSave = name.isNotBlank() && steps.isNotEmpty() && steps.all {
+        stepError(
+            it
+        ) == null
+    }
 
     Scaffold(topBar = {
         TopAppBar(
@@ -133,16 +135,16 @@ fun EditScreen(vm: MainViewModel, existing: Recipe?, onClose: () -> Unit) {
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
-                label = { Text("Notes (optional)") },
-                supportingText = { Text("Solvent, substrate, target thickness...") },
-                modifier = Modifier.fillMaxWidth()
+                label = { Text("Notes") },
+                supportingText = { Text("Solvent, substrate, target thickness, etc.") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 4
             )
 
             steps.forEachIndexed { index, step ->
                 ElevatedCard(Modifier.fillMaxWidth()) {
                     Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
@@ -155,7 +157,7 @@ fun EditScreen(vm: MainViewModel, existing: Recipe?, onClose: () -> Unit) {
                                     painterResource(R.drawable.trash),
                                     contentDescription = "Remove step ${index + 1}",
                                     tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.height(20.dp)
+                                    modifier = Modifier.height(18.dp)
                                 )
                             }
                         }
@@ -169,6 +171,17 @@ fun EditScreen(vm: MainViewModel, existing: Recipe?, onClose: () -> Unit) {
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.weight(1f)
                             )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("CW", style = MaterialTheme.typography.labelSmall)
+                                Switch(
+                                    checked = step.clockwise,
+                                    onCheckedChange = { steps[index] = step.copy(clockwise = it) })
+                            }
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             OutlinedTextField(
                                 value = step.accelMs,
                                 onValueChange = { steps[index] = step.copy(accelMs = it) },
@@ -178,26 +191,15 @@ fun EditScreen(vm: MainViewModel, existing: Recipe?, onClose: () -> Unit) {
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.weight(1f)
                             )
-                        }
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
                             OutlinedTextField(
-                                value = step.dwellMs,
-                                onValueChange = { steps[index] = step.copy(dwellMs = it) },
+                                value = step.holdMs,
+                                onValueChange = { steps[index] = step.copy(holdMs = it) },
                                 label = { Text("Hold") },
                                 suffix = { Text("ms") },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.weight(1f)
                             )
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("CW", style = MaterialTheme.typography.labelSmall)
-                                Switch(
-                                    checked = step.clockwise,
-                                    onCheckedChange = { steps[index] = step.copy(clockwise = it) })
-                            }
                         }
                         stepError(step)?.let {
                             Text(
@@ -231,7 +233,7 @@ fun EditScreen(vm: MainViewModel, existing: Recipe?, onClose: () -> Unit) {
                                 position = i,
                                 rpm = s.rpm.toInt(),
                                 accelMs = s.accelMs.toInt(),
-                                dwellMs = s.dwellMs.toInt(),
+                                holdMs = s.holdMs.toInt(),
                                 clockwise = s.clockwise
                             )
                         })

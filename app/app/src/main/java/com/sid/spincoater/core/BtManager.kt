@@ -32,6 +32,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
 import timber.log.Timber
 import java.io.IOException
 import java.io.InputStream
@@ -47,7 +48,6 @@ data class BtDevice(
     val name: String?,
     val address: String,
     val bonded: Boolean,
-    val rssi: Int? = null
 ) {
     val isSpinCoater: Boolean get() = name?.contains(Protocol.DEVICE_NAME, true) == true
 }
@@ -151,12 +151,10 @@ class BtManager(private val context: Context) {
                         )
 
                     val dev = device ?: return
-                    val rssi = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, 0).toInt()
                     val entry = BtDevice(
                         name = runCatching { dev.name }.getOrNull(),
                         address = dev.address,
-                        bonded = dev.bondState == BluetoothDevice.BOND_BONDED,
-                        rssi = if (rssi == 0) null else rssi
+                        bonded = dev.bondState == BluetoothDevice.BOND_BONDED
                     )
 
                     seen[entry.address] = entry
@@ -195,12 +193,10 @@ class BtManager(private val context: Context) {
     fun refreshBonded() {
         if (!hasConnectPermission()) return
         adapter?.bondedDevices?.forEach { dev ->
-            val existing = seen[dev.address]
             seen[dev.address] = BtDevice(
                 name = runCatching { dev.name }.getOrNull(),
                 address = dev.address,
                 bonded = true,
-                rssi = existing?.rssi
             )
         }
 
@@ -208,11 +204,8 @@ class BtManager(private val context: Context) {
     }
 
     private fun publishDevices() {
-        _devices.value = seen.values.sortedWith(
-            compareByDescending<BtDevice> { it.isSpinCoater }
-                .thenByDescending { it.bonded }
-                .thenByDescending { it.rssi ?: Int.MIN_VALUE }
-        )
+        _devices.value =
+            seen.values.sortedWith(compareByDescending<BtDevice> { it.isSpinCoater }.thenByDescending { it.bonded })
     }
 
     @RequiresPermission(allOf = [Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT])
@@ -270,8 +263,7 @@ class BtManager(private val context: Context) {
 
         if (device.bondState != BluetoothDevice.BOND_BONDED) {
             emitLog(
-                LineDir.Info,
-                "Device not paired. Bonding... (PIN ${Protocol.PAIRING_PIN})"
+                LineDir.Info, "Device not paired. Bonding... (PIN ${Protocol.PAIRING_PIN})"
             )
             runCatching { device.createBond() }
         }
@@ -411,27 +403,19 @@ class BtManager(private val context: Context) {
 
         when {
             line.startsWith("{") -> {
-                val obj = runCatching { org.json.JSONObject(line) }.getOrNull()
+                val obj = runCatching { JSONObject(line) }.getOrNull()
                 if (obj == null) {
                     releaseAck(); return
                 }
                 if (obj.has("error")) {
                     val msg = Protocol.explainError(
-                        obj.optString("error"),
-                        obj.optString("field").takeIf { it.isNotBlank() })
+                        obj.optString("error"), obj.optString("field").takeIf { it.isNotBlank() })
                     _errors.tryEmit(msg)
                     emitLog(LineDir.Error, msg)
                 } else {
                     DeviceStatus.fromJson(obj)?.let { _status.value = it }
                 }
                 releaseAck()
-            }
-
-            line.startsWith("[") -> {
-                val arr = runCatching { org.json.JSONArray(line) }.getOrNull() ?: return
-                val passes = DeviceStatus.passesFromTelemetry(arr)
-
-                _status.value?.let { _status.value = it.copy(passes = passes) }
             }
 
             line.equals("OK", true) -> releaseAck()
