@@ -2,8 +2,6 @@
 
 #include <Arduino.h>
 
-#include "hardware.h"
-
 /**
 start
   Start motor.
@@ -20,43 +18,32 @@ estop
 clearfault
   Clear emergency/alarm fault state.
 
-freq=<int>
-  Set PWM frequency.
-  Range: 1..MAX_FREQ
-  Example: freq=1000
+rpm=<int>
+  Set closed-loop target RPM.
+  Range: 200..4000
+  Example: rpm=1200
 
-duty=<float>
-  Set PWM duty cycle %.
-  Range: 0..100
-  Example: duty=45.5
+open_loop_raw=<int>
+  Set the open-loop command raw value.
+  Range: 0..1000
+  Example: open_loop_raw=405
 
-move=<float>
-length_mm=<float>
-  Move in mm.
-  Range: >= 0
-  Example: move=25
+accel_ms=<int>
+  Set acceleration time in milliseconds.
+  Range: 300..15000
+  Example: accel_ms=500
 
-pwmdur=<float>
-duration_ms=<float>
-  Set PWM duration.
-  Range: >= 0
-  Example: pwmdur=500
-
-pwmpin=<int>
-  Set PWM output pin.
-  Must be a valid and available PWM pin.
-  Example: pwmpin=22
+speed_pulses_per_revolution=<int>
+  Set speed sensor pulses per revolution.
+  Range: >= 1
+  Example: speed_pulses_per_revolution=4
 
 dir=<1|0>
   Set motor direction output (1: CW, 0: CCW).
   Example: dir=1
 
-polepairs=<int>
-  Set speed sensor pole-pair count used for RPM calculation.
-  Example: polepairs=4
-
-addpass=<float>,<float>,<float>
-  Add a pass (rpm, acceleration, delay (ms)).
-  Example: addpass=1200,50,200
+mode=<closed_loop|open_loop>
+  Set motor control mode.
+  Example: mode=closed_loop
 */
 String parse(String input);

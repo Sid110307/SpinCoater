@@ -22,7 +22,7 @@ static constexpr int LEDC_RESOLUTION = 8;
 static RuntimeState state;
 static unsigned long lastEmergencyMillis = 0;
 
-static void writeStatusLed(uint8_t red, uint8_t green, uint8_t blue) {
+static void writeStatusLed(uint16_t red, uint16_t green, uint16_t blue) {
 	if (!state.statusLedReady) return;
 
 	ledcWrite(Pins::LED_R, red);
@@ -38,19 +38,6 @@ static void initializeStatusLed() {
 	ledcAttach(Pins::LED_B, LEDC_FREQ, LEDC_RESOLUTION);
 
 	writeStatusLed(0, 0, 0);
-}
-
-bool isValidMotorPwmPin(int pin) {
-	switch (pin) {
-		case 13:
-		case 16:
-		case 17:
-		case 22:
-		case 32:
-			return true;
-		default:
-			return false;
-	}
 }
 
 void setupHardware() {
@@ -122,11 +109,11 @@ bool isMotorRunning() {
 }
 
 void setMotorPolePairs(int polePairs) {
-	if (polePairs > 0) config.polePairs = polePairs;
+	if (polePairs > 0) config.speedPulsesPerRevolution = static_cast<uint16_t>(polePairs);
 }
 
 int getMotorPolePairs() {
-	return config.polePairs > 0 ? config.polePairs : DEFAULT_POLE_PAIRS;
+	return config.speedPulsesPerRevolution > 0 ? config.speedPulsesPerRevolution : DEFAULT_SPEED_PULSES_PER_REVOLUTION;
 }
 
 void setEmergencyLatched(bool latched) {
@@ -176,36 +163,36 @@ MotorStatus getMotorStatus() {
 
 const char* motorStatusToString(MotorStatus status) {
 	switch (status) {
-		case MotorStatus::Idle:
-			return "idle";
-		case MotorStatus::RunningClockwise:
-			return "running_cw";
-		case MotorStatus::RunningCounterClockwise:
-			return "running_ccw";
-		case MotorStatus::EmergencyStop:
-			return "emergency_stop";
-		case MotorStatus::AlarmFault:
-			return "alarm_fault";
-		default:
-			return "unknown";
+	case MotorStatus::Idle:
+		return "idle";
+	case MotorStatus::RunningClockwise:
+		return "running_cw";
+	case MotorStatus::RunningCounterClockwise:
+		return "running_ccw";
+	case MotorStatus::EmergencyStop:
+		return "emergency_stop";
+	case MotorStatus::AlarmFault:
+		return "alarm_fault";
+	default:
+		return "unknown";
 	}
 }
 
 void updateStatusLed() {
 	switch (getMotorStatus()) {
-		case MotorStatus::EmergencyStop:
-			writeStatusLed(255, 0, 0);
-			break;
-		case MotorStatus::RunningClockwise:
-		case MotorStatus::RunningCounterClockwise:
-			writeStatusLed(0, 255, 0);
-			break;
-		case MotorStatus::Idle:
-		default:
-			if (state.bluetoothConnected) writeStatusLed(0, 192, 192);
-			else writeStatusLed(255, 32, 0);
+	case MotorStatus::EmergencyStop:
+		writeStatusLed(255, 0, 0);
+		break;
+	case MotorStatus::RunningClockwise:
+	case MotorStatus::RunningCounterClockwise:
+		writeStatusLed(0, 255, 0);
+		break;
+	case MotorStatus::Idle:
+	default:
+		if (state.bluetoothConnected) writeStatusLed(0, 192, 192);
+		else writeStatusLed(255, 32, 0);
 
-			break;
+		break;
 	}
 }
 

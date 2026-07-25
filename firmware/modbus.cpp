@@ -3,35 +3,36 @@
 #include "config.h"
 
 static HardwareSerial ModbusSerial(2);
-static uint8_t modbusSlaveAddress = 1;
+static uint16_t modbusSlaveAddress = 1;
 static bool modbusReady = false;
 
 static constexpr uint32_t MODBUS_BAUDRATE = 115200;
 static constexpr uint32_t MODBUS_RESPONSE_TIMEOUT_MS = 100;
 static constexpr uint32_t MODBUS_FRAME_GAP_MS = 4;
 
-static uint16_t crc16(const uint8_t* data, size_t length) {
+static uint16_t crc16(const uint16_t* data, size_t length) {
 	uint16_t crc = 0xFFFF;
 	for (size_t i = 0; i < length; ++i) {
 		crc ^= data[i];
 
-		for (uint8_t bit = 0; bit < 8; ++bit) {
+		for (uint16_t bit = 0; bit < 8; ++bit) {
 			if (crc & 0x0001) {
 				crc >>= 1;
 				crc ^= 0xA001;
-			} else crc >>= 1;
+			}
+			else crc >>= 1;
 		}
 	}
 
 	return crc;
 }
 
-static size_t buildFrame(const uint8_t* payload, size_t payloadLength, uint8_t* frame) {
+static size_t buildFrame(const uint16_t* payload, size_t payloadLength, uint16_t* frame) {
 	for (size_t i = 0; i < payloadLength; ++i) frame[i] = payload[i];
 
 	uint16_t crc = crc16(payload, payloadLength);
-	frame[payloadLength] = static_cast<uint8_t>(crc & 0xFF);
-	frame[payloadLength + 1] = static_cast<uint8_t>((crc >> 8) & 0xFF);
+	frame[payloadLength] = static_cast<uint16_t>(crc & 0xFF);
+	frame[payloadLength + 1] = static_cast<uint16_t>((crc >> 8) & 0xFF);
 
 	return payloadLength + 2;
 }
@@ -40,7 +41,7 @@ static void clearRxBuffer() {
 	while (ModbusSerial.available() > 0) ModbusSerial.read();
 }
 
-static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, size_t responseCapacity, size_t& responseLength) {
+static bool tx(const uint16_t* request, size_t requestLength, uint16_t* response, size_t responseCapacity, size_t& responseLength) {
 	if (!modbusReady) return false;
 
 	clearRxBuffer();
@@ -60,7 +61,7 @@ static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, 
 	while ((millis() - start) < MODBUS_RESPONSE_TIMEOUT_MS) {
 		while (ModbusSerial.available() > 0) {
 			if (responseLength < responseCapacity)
-				response[responseLength++] = static_cast<uint8_t>(ModbusSerial.read());
+				response[responseLength++] = static_cast<uint16_t>(ModbusSerial.read());
 			else ModbusSerial.read();
 
 			lastByte = millis();
@@ -92,17 +93,17 @@ static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, 
 }
 
 static bool writeRegisterInternal(uint16_t reg, uint16_t value) {
-	uint8_t payload[6];
+	uint16_t payload[6];
 	payload[0] = modbusSlaveAddress;
 	payload[1] = 0x06;
-	payload[2] = static_cast<uint8_t>((reg >> 8) & 0xFF);
-	payload[3] = static_cast<uint8_t>(reg & 0xFF);
-	payload[4] = static_cast<uint8_t>((value >> 8) & 0xFF);
-	payload[5] = static_cast<uint8_t>(value & 0xFF);
+	payload[2] = static_cast<uint16_t>((reg >> 8) & 0xFF);
+	payload[3] = static_cast<uint16_t>(reg & 0xFF);
+	payload[4] = static_cast<uint16_t>((value >> 8) & 0xFF);
+	payload[5] = static_cast<uint16_t>(value & 0xFF);
 
-	uint8_t request[8];
+	uint16_t request[8];
 	size_t requestLength = buildFrame(payload, sizeof(payload), request);
-	uint8_t response[16];
+	uint16_t response[16];
 	size_t responseLength = 0;
 
 	if (!tx(request, requestLength, response, sizeof(response), responseLength)) return false;
@@ -113,17 +114,17 @@ static bool writeRegisterInternal(uint16_t reg, uint16_t value) {
 }
 
 static bool readRegisterInternal(uint16_t reg, uint16_t& value) {
-	uint8_t payload[6];
+	uint16_t payload[6];
 	payload[0] = modbusSlaveAddress;
 	payload[1] = 0x03;
-	payload[2] = static_cast<uint8_t>((reg >> 8) & 0xFF);
-	payload[3] = static_cast<uint8_t>(reg & 0xFF);
+	payload[2] = static_cast<uint16_t>((reg >> 8) & 0xFF);
+	payload[3] = static_cast<uint16_t>(reg & 0xFF);
 	payload[4] = 0x00;
 	payload[5] = 0x01;
 
-	uint8_t request[8];
+	uint16_t request[8];
 	size_t requestLength = buildFrame(payload, sizeof(payload), request);
-	uint8_t response[16];
+	uint16_t response[16];
 	size_t responseLength = 0;
 
 	if (!tx(request, requestLength, response, sizeof(response), responseLength)) return false;
@@ -136,7 +137,7 @@ static bool readRegisterInternal(uint16_t reg, uint16_t& value) {
 	return true;
 }
 
-bool modbusBegin(uint8_t slaveAddress) {
+bool modbusBegin(uint16_t slaveAddress) {
 	modbusSlaveAddress = slaveAddress;
 	pinMode(Pins::RS485_DE_RE, OUTPUT);
 	digitalWrite(Pins::RS485_DE_RE, LOW);
@@ -164,7 +165,7 @@ bool modbusSetClosedLoopRpm(uint16_t rpm) {
 	return writeRegisterInternal(0x4006, rpm);
 }
 
-bool modbusSetOpenLoopSpeedPercent(uint8_t percent) {
+bool modbusSetOpenLoopSpeedPercent(uint16_t percent) {
 	return writeRegisterInternal(0x4007, percent);
 }
 

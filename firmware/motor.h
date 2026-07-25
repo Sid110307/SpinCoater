@@ -5,9 +5,9 @@
 bool startMotor();
 void stopMotor();
 
-bool changeFreq(int freq);
-bool changeDuty(float duty);
-bool changeLen(float len);
-bool changeDur(float dur);
-bool changePin(int pin);
-bool addPass(float rpm, float accel, float delay);
+bool changeControlMode(ControlMode controlMode);
+bool changeTargetRpm(uint16_t rpm);
+bool changeOpenLoopCommandRaw(uint16_t raw);
+bool changeAccelerationMs(uint16_t accelerationMs);
+bool changeSpeedPulsesPerRevolution(uint16_t pulsesPerRevolution);
+bool changeDirection(MotorDirection direction);

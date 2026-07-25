@@ -4,36 +4,34 @@
 #include "hardware.h"
 #include "modbus.h"
 
-static bool preferClosedLoop = false;
-
-static uint16_t clampClosedLoopRpm(int rpm) {
+static uint16_t clampClosedLoopRpm(uint16_t rpm) {
   if (rpm < 200) return 200;
   if (rpm > 4000) return 4000;
-  return static_cast<uint16_t>(rpm);
+  return rpm;
 }
 
-static uint8_t clampOpenLoopPercent(float percent) {
-  if (percent < 10.0f) return 100;
-  if (percent > 100.0f) return 1000;
-  return static_cast<uint8_t>(percent * 10);
+static uint16_t clampOpenLoopCommandRaw(uint16_t raw) {
+  if (raw > 1000) return 1000;
+  return raw;
 }
 
-static uint16_t clampAccelTime(float ms) {
-  if (ms < 300.0f) return 300;
-  if (ms > 15000.0f) return 15000;
-  return static_cast<uint16_t>(ms);
+static uint16_t clampAccelerationMs(uint16_t ms) {
+  if (ms < 300) return 300;
+  if (ms > 15000) return 15000;
+  return ms;
 }
 
 static bool applyMotorProfile(bool running) {
   if (!modbusUseCommunicationControl()) return false;
-  if (!modbusSetControlMode(preferClosedLoop)) return false;
-  if (!modbusSetDirection(getMotorDirection() == MotorDirection::Clockwise)) return false;
-  if (!modbusSetAccelTimeMs(clampAccelTime(config.duration))) return false;
+  if (!modbusSetControlMode(config.controlMode == ControlMode::ClosedLoop)) return false;
+  if (!modbusSetDirection(config.direction == MotorDirection::Clockwise)) return false;
+  if (!modbusSetAccelTimeMs(clampAccelerationMs(config.accelerationMs))) return false;
 
-  if (preferClosedLoop) {
-    if (!modbusSetClosedLoopRpm(clampClosedLoopRpm(config.frequency))) return false;
-  } else {
-    if (!modbusSetOpenLoopSpeedPercent(clampOpenLoopPercent(config.dutyCycle))) return false;
+  if (config.controlMode == ControlMode::ClosedLoop) {
+    if (!modbusSetClosedLoopRpm(clampClosedLoopRpm(config.targetRpm))) return false;
+  }
+  else {
+    if (!modbusSetOpenLoopSpeedPercent(clampOpenLoopCommandRaw(config.openLoopCommandRaw))) return false;
   }
 
   if (!modbusSetBrake(false)) return false;
@@ -56,81 +54,88 @@ void stopMotor() {
   applyMotorRunState(false);
 }
 
-bool changeFreq(int freq) {
-  if (config.frequency == freq) return true;
-  if (freq <= 0 || freq > MAX_FREQ) return false;
+bool changeControlMode(ControlMode controlMode) {
+  if (config.controlMode == controlMode) return true;
 
-  config.frequency = freq;
-  preferClosedLoop = true;
+  config.controlMode = controlMode;
   saveConfig();
 
   if (isMotorRunning()) {
-    if (!modbusSetControlMode(true)) return false;
-    if (!modbusSetClosedLoopRpm(clampClosedLoopRpm(freq))) return false;
+    if (!modbusSetControlMode(controlMode == ControlMode::ClosedLoop)) return false;
+    if (controlMode == ControlMode::ClosedLoop) {
+      if (!modbusSetClosedLoopRpm(clampClosedLoopRpm(config.targetRpm))) return false;
+    }
+    else {
+      if (!modbusSetOpenLoopSpeedPercent(clampOpenLoopCommandRaw(config.openLoopCommandRaw))) return false;
+    }
   }
 
   return true;
 }
 
-bool changeDuty(float duty) {
-  if (config.dutyCycle == duty) return true;
-  if (duty < 0 || duty > 100) return false;
+bool changeTargetRpm(uint16_t rpm) {
+  if (rpm < 200 || rpm > 4000) return false;
+  if (config.targetRpm == rpm) return true;
 
-  config.dutyCycle = duty;
-  preferClosedLoop = false;
+  config.targetRpm = rpm;
   saveConfig();
 
-  if (isMotorRunning()) {
-    if (!modbusSetControlMode(false)) return false;
-    if (!modbusSetOpenLoopSpeedPercent(clampOpenLoopPercent(duty))) return false;
+  if (isMotorRunning() && config.controlMode == ControlMode::ClosedLoop) {
+    if (!modbusSetClosedLoopRpm(clampClosedLoopRpm(rpm))) return false;
   }
 
   return true;
 }
 
-bool changeLen(float len) {
-  if (config.length == len) return true;
-  if (len < 0) return false;
+bool changeOpenLoopCommandRaw(uint16_t raw) {
+  if (raw > 1000) return false;
+  if (config.openLoopCommandRaw == raw) return true;
 
-  config.length = len;
+  config.openLoopCommandRaw = raw;
   saveConfig();
 
-  return true;
-}
-
-bool changeDur(float dur) {
-  if (config.duration == dur) return true;
-  if (dur < 0) return false;
-
-  config.duration = dur;
-  saveConfig();
-
-  if (isMotorRunning()) {
-    if (!modbusSetAccelTimeMs(clampAccelTime(dur))) return false;
+  if (isMotorRunning() && config.controlMode == ControlMode::OpenLoop) {
+    if (!modbusSetOpenLoopSpeedPercent(clampOpenLoopCommandRaw(raw))) return false;
   }
 
   return true;
 }
 
-bool changePin(int pin) {
-  if (config.pwmPin == pin) return true;
-  if (!isValidMotorPwmPin(pin)) return false;
+bool changeAccelerationMs(uint16_t accelerationMs) {
+  if (accelerationMs < 300 || accelerationMs > 15000) return false;
+  if (config.accelerationMs == accelerationMs) return true;
 
-  config.pwmPin = pin;
+  config.accelerationMs = accelerationMs;
+  saveConfig();
+
+  if (isMotorRunning()) {
+    if (!modbusSetAccelTimeMs(clampAccelerationMs(accelerationMs))) return false;
+  }
+
+  return true;
+}
+
+bool changeSpeedPulsesPerRevolution(uint16_t pulsesPerRevolution) {
+  if (pulsesPerRevolution == 0) return false;
+  if (config.speedPulsesPerRevolution == pulsesPerRevolution) return true;
+
+  config.speedPulsesPerRevolution = pulsesPerRevolution;
   saveConfig();
 
   return true;
 }
 
-bool addPass(float rpm, float accel, float delay) {
-  if (config.numPasses >= MAX_PASSES) return false;
-  if (rpm < 0 || accel < 0 || delay < 0) return false;
+bool changeDirection(MotorDirection direction) {
+  if (config.direction != direction) {
+    config.direction = direction;
+    saveConfig();
+  }
 
-  config.passes[config.numPasses].rpm = rpm;
-  config.passes[config.numPasses].accel = accel;
-  config.passes[config.numPasses].delay = delay;
-  config.numPasses++;
-  saveConfig();
+  if (isMotorRunning()) {
+    if (!modbusSetDirection(direction == MotorDirection::Clockwise)) return false;
+  }
+
+  setMotorDirection(direction);
 
   return true;
 }

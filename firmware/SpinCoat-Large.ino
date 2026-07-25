@@ -1,6 +1,6 @@
 /**********************************************************************
 *   Spin Coater Motor Controller
-*   Ver: 0.99 | Date: 24/7/26
+*   Ver: 0.100 | Date: 26/7/26
 *   Authors: K. Bhaskar, Siddharth P Bharadwaj
 */
 
@@ -18,7 +18,7 @@ BluetoothSerial BT;
 Preferences prefs;
 MotorConfig config;
 
-volatile bool sendTelemetry = false;
+volatile bool sampleDue = false;
 hw_timer_t* timer = NULL;
 
 static constexpr size_t COMMAND_BUFFER_SIZE = 128;
@@ -26,15 +26,16 @@ char bluetoothCommandBuffer[COMMAND_BUFFER_SIZE];
 size_t bluetoothCommandLength = 0;
 
 void IRAM_ATTR onTimer() {
-  sendTelemetry = true;
+  sampleDue = true;
 }
 
 void setup() {
   loadConfig();
   setupHardware();
   Serial.begin(115200);
+  setMotorDirection(config.direction);
 
-  if (!modbusBegin()) {
+  if (!modbusBegin(config.modbusAddress)) {
     Serial.println("Modbus init failed");
     setAlarmLatched(true);
   }
@@ -52,7 +53,8 @@ void setup() {
   if (!BT.begin("SpinCoat")) {
     Serial.println("BT begin failed");
     setBluetoothConnected(false);
-  } else {
+  }
+  else {
     BT.setPin("123456", 6);
     BT.println("Ready");
   }
@@ -73,7 +75,8 @@ void loop() {
       bluetoothCommandBuffer[bluetoothCommandLength] = '\0';
       if (btOverflow) {
         BT.println("{\"error\":\"BUFFER_OVERFLOW\"}");
-      } else {
+      }
+      else {
         String response = parse(String(bluetoothCommandBuffer));
         BT.println(response);
       }
@@ -85,15 +88,13 @@ void loop() {
 
     if (bluetoothCommandLength < COMMAND_BUFFER_SIZE - 1) {
       bluetoothCommandBuffer[bluetoothCommandLength++] = incoming;
-    } else btOverflow = true;
+    }
+    else btOverflow = true;
   }
 
-  if (sendTelemetry) {
+  if (sampleDue) {
     sampleSpeedRpm();
-    getPasses(BT);  // reference to Stream object of BT
-    BT.println();
-
-    sendTelemetry = false;
+    sampleDue = false;
   }
 
   delay(1);

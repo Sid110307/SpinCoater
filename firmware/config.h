@@ -3,55 +3,55 @@
 #include <Arduino.h>
 #include <Preferences.h>
 
+enum class MotorDirection : uint8_t {
+  Clockwise = 0,
+  CounterClockwise = 1,
+};
+
+enum class ControlMode : uint8_t {
+  OpenLoop = 0,
+  ClosedLoop = 1,
+};
+
 extern Preferences prefs;
 
 namespace Pins {
-static constexpr uint8_t PWM = 13;
-static constexpr uint8_t ALM = 14;
-static constexpr uint8_t SPEED = 27;
-static constexpr uint8_t BRK = 26;
-static constexpr uint8_t DIR = 25;
-static constexpr uint8_t EN = 33;
-static constexpr uint8_t RS485_RX = 16;
-static constexpr uint8_t RS485_TX = 17;
-static constexpr uint8_t RS485_DE_RE = 5;
-static constexpr uint8_t EMERGENCY = 23;
-static constexpr uint8_t LED_R = 21;
-static constexpr uint8_t LED_G = 19;
-static constexpr uint8_t LED_B = 18;
+  static constexpr uint16_t EMERGENCY = 23;
+  static constexpr uint16_t ALM = 14;
+  static constexpr uint16_t SPEED = 27;
+  static constexpr uint16_t RS485_RX = 16;
+  static constexpr uint16_t RS485_TX = 17;
+  static constexpr uint16_t RS485_DE_RE = 5;
+  static constexpr uint16_t LED_R = 21;
+  static constexpr uint16_t LED_G = 19;
+  static constexpr uint16_t LED_B = 18;
 }
 
-static constexpr int DEFAULT_FREQ = 10000;
-static constexpr float DEFAULT_DUTY = 40.5;
-static constexpr int DEFAULT_PWM_PIN = Pins::PWM;
-static constexpr int DEFAULT_POLE_PAIRS = 4;
-static constexpr int MAX_FREQ = 40000000;
+static constexpr uint8_t DEFAULT_MODBUS_ADDRESS = 1;
+static constexpr ControlMode DEFAULT_CONTROL_MODE = ControlMode::OpenLoop;
+static constexpr MotorDirection DEFAULT_DIRECTION = MotorDirection::Clockwise;
+static constexpr uint16_t DEFAULT_TARGET_RPM = 1200;
+static constexpr uint16_t DEFAULT_OPEN_LOOP_COMMAND_RAW = 405;
+static constexpr uint16_t DEFAULT_ACCELERATION_MS = 300;
+static constexpr uint16_t DEFAULT_SPEED_PULSES_PER_REVOLUTION = 4;
 
-static constexpr int MAX_PASSES = 5;
-static constexpr int CONFIG_VERSION = 3;  // Change if config params update
+static constexpr uint32_t CONFIG_VERSION = 4;  // Change if config params update
 
 static constexpr int DEBOUNCE_MS = 200;
 static constexpr uint32_t TIMER_FREQUENCY = 1000000;    // 1 MHz
 static constexpr uint32_t TIMER_INTERVAL_US = 1000000;  // 1,000,000 us = 1s
 
-bool isValidMotorPwmPin(int pin);
-
-struct Pass {
-  float rpm;
-  float accel;
-  float delay;
-};
-
 struct MotorConfig {
-  int version;
-  int frequency;
-  float dutyCycle;
-  float length;
-  float duration;
-  int pwmPin;
-  int polePairs;
-  int numPasses;
-  Pass passes[MAX_PASSES];
+  uint32_t version;
+
+  uint8_t modbusAddress;
+  ControlMode controlMode;
+  MotorDirection direction;
+
+  uint16_t targetRpm;
+  uint16_t openLoopCommandRaw;
+  uint16_t accelerationMs;
+  uint16_t speedPulsesPerRevolution;
 };
 
 extern MotorConfig config;

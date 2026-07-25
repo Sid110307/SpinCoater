@@ -3,12 +3,7 @@
 #include <Arduino.h>
 #include "config.h"
 
-enum class MotorDirection : uint8_t {
-	Clockwise = 0,
-	CounterClockwise = 1,
-};
-
-enum class MotorStatus : uint8_t {
+enum class MotorStatus : uint16_t {
 	Idle = 0,
 	RunningClockwise = 1,
 	RunningCounterClockwise = 2,
@@ -40,13 +35,13 @@ bool isAlarmLatched();
 void clearAlarmLatched();
 
 /**
-Emergency stop: red
-Alarm fault: orange
-Running clockwise: green
-Running counter-clockwise: blue
-Bluetooth connected (idle): cyan
-Idle: off
-*/
+ Emergency stop: red
+ Alarm fault: orange
+ Running clockwise: green
+ Running counter-clockwise: blue
+ Bluetooth connected (idle): cyan
+ Idle: off
+ */
 void updateStatusLed();
 MotorStatus getMotorStatus();
 const char* motorStatusToString(MotorStatus status);
