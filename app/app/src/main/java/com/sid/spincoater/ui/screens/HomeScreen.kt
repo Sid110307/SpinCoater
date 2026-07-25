@@ -51,6 +51,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.sid.spincoater.R
 import com.sid.spincoater.core.ConnState
+import com.sid.spincoater.core.ControlMode
 import com.sid.spincoater.core.Protocol
 import com.sid.spincoater.core.motorFaultMap
 import com.sid.spincoater.ui.components.CollapsibleCard
@@ -287,24 +288,84 @@ fun HomeScreen(
                     }
                 }
             }
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
+                FilledTonalButton(onClick = onOpenRecipes) {
+                    Icon(
+                        painterResource(R.drawable.layers),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text("Recipes")
+                }
+                FilledTonalButton(onClick = onOpenLog) {
+                    Icon(
+                        painterResource(R.drawable.notes),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    Text("Log")
+                }
+                OutlinedButton(onClick = { vm.refreshStatus() }, enabled = connected) {
+                    Icon(
+                        painterResource(R.drawable.refresh),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .height(18.dp)
+                            .padding(end = 8.dp)
+                    )
+                    Text("Refresh")
+                }
+            }
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text("Motor settings", style = MaterialTheme.typography.titleMedium)
-                    NumberField(
-                        label = "Target speed",
-                        value = status?.rpmTarget ?: Protocol.MIN_RPM,
-                        onCommit = { vm.setRpm(it) },
-                        range = Protocol.MIN_RPM..Protocol.MAX_RPM,
-                        step = 50,
-                        suffix = "rpm",
-                        supporting = "Target speed for the motor.",
-                        enabled = connected
-                    )
+                    Text("Control mode", style = MaterialTheme.typography.labelLarge)
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = status?.controlMode == ControlMode.ClosedLoop,
+                            onClick = { vm.setControlMode(true) },
+                            enabled = connected,
+                            shape = SegmentedButtonDefaults.itemShape(0, 2)
+                        ) { Text("Closed loop") }
+                        SegmentedButton(
+                            selected = status?.controlMode == ControlMode.OpenLoop,
+                            onClick = { vm.setControlMode(false) },
+                            enabled = connected,
+                            shape = SegmentedButtonDefaults.itemShape(1, 2)
+                        ) { Text("Open loop") }
+                    }
+                    if (status?.controlMode == ControlMode.OpenLoop) {
+                        NumberField(
+                            label = "Open-loop speed",
+                            value = status?.openLoopRaw ?: 0,
+                            onCommit = { vm.setOpenLoopRaw(it) },
+                            range = Protocol.MIN_OPEN_LOOP_RAW..Protocol.MAX_OPEN_LOOP_RAW,
+                            suffix = "raw",
+                            supporting = "Open-loop speed value for the motor.",
+                            enabled = connected
+                        )
+                    } else {
+                        NumberField(
+                            label = "Target speed",
+                            value = status?.rpmTarget ?: Protocol.MIN_RPM,
+                            onCommit = { vm.setRpm(it) },
+                            range = Protocol.MIN_RPM..Protocol.MAX_RPM,
+                            step = 50,
+                            suffix = "rpm",
+                            supporting = "Target speed for the motor.",
+                            enabled = connected
+                        )
+                    }
                     NumberField(
                         label = "Ramp time",
-                        value = (status?.accelMs ?: Protocol.MIN_ACCEL_MS.toDouble()).toInt(),
+                        value = status?.accelMs ?: Protocol.MIN_ACCEL_MS,
                         onCommit = { vm.setAccelMs(it) },
                         range = Protocol.MIN_ACCEL_MS..Protocol.MAX_ACCEL_MS,
                         step = 100,
@@ -312,7 +373,6 @@ fun HomeScreen(
                         supporting = "Acceleration time to reach the target speed.",
                         enabled = connected
                     )
-
                     Text("Direction", style = MaterialTheme.typography.labelLarge)
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         SegmentedButton(
@@ -354,9 +414,9 @@ fun HomeScreen(
                         "Power",
                         status?.let { "%.1f".format(it.motorPower) } ?: "--",
                         unit = "W")
-                    MetricTile("Drive speed", status?.motorSpeed?.toString() ?: "--", unit = "rpm")
+                    MetricTile("Motor speed", status?.motorSpeed?.toString() ?: "--", unit = "rpm")
                     MetricTile(
-                        "Hall speed",
+                        "Measured speed",
                         status?.let { "%.0f".format(it.speedRpm) } ?: "--",
                         unit = "rpm")
                     MetricTile(
@@ -373,39 +433,6 @@ fun HomeScreen(
                             )
                         }s ago", style = MaterialTheme.typography.labelSmall
                     )
-                }
-            }
-            FlowRow(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-            ) {
-                FilledTonalButton(onClick = onOpenRecipes) {
-                    Icon(
-                        painterResource(R.drawable.layers),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.size(8.dp))
-                    Text("Recipes")
-                }
-                FilledTonalButton(onClick = onOpenLog) {
-                    Icon(
-                        painterResource(R.drawable.notes),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.size(8.dp))
-                    Text("Log")
-                }
-                OutlinedButton(onClick = { vm.refreshStatus() }, enabled = connected) {
-                    Icon(
-                        painterResource(R.drawable.refresh),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .height(18.dp)
-                            .padding(end = 8.dp)
-                    )
-                    Text("Refresh")
                 }
             }
             CollapsibleCard(

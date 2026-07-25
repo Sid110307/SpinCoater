@@ -90,7 +90,7 @@ fun NumberField(
             modifier = Modifier.weight(1f)
         )
         FilledTonalIconButton(
-            modifier = Modifier.padding(top = 12.dp), onClick = {
+            modifier = Modifier.padding(vertical = 12.dp), onClick = {
                 val next = ((parsed ?: value) - step).coerceIn(range.first, range.last)
                 text = next.toString(); dirty = false; onCommit(next)
             }, enabled = enabled
@@ -104,7 +104,7 @@ fun NumberField(
             )
         }
         FilledTonalIconButton(
-            modifier = Modifier.padding(top = 12.dp), onClick = {
+            modifier = Modifier.padding(vertical = 12.dp), onClick = {
                 val next = ((parsed ?: value) + step).coerceIn(range.first, range.last)
                 text = next.toString(); dirty = false; onCommit(next)
             }, enabled = enabled

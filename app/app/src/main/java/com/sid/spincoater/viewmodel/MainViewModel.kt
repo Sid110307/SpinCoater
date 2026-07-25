@@ -8,6 +8,7 @@ import com.sid.spincoater.core.AppDatabase
 import com.sid.spincoater.core.BtDevice
 import com.sid.spincoater.core.BtManager
 import com.sid.spincoater.core.ConnState
+import com.sid.spincoater.core.ControlMode
 import com.sid.spincoater.core.DeviceStatus
 import com.sid.spincoater.core.LineDir
 import com.sid.spincoater.core.LogLine
@@ -38,8 +39,7 @@ data class RunProgress(
 ) {
     val fraction: Float
         get() = if (totalMs <= 0) 0f else (elapsedMs.toFloat() / totalMs).coerceIn(
-            0f,
-            1f
+            0f, 1f
         )
 }
 
@@ -134,14 +134,24 @@ class MainViewModel(app: Application, previewMode: Boolean = false) : AndroidVie
             _connState.value = ConnState.Connected
             _connectedAddress.value = "AA:BB:CC:DD:EE:01"
             _devices.value = listOf(
-                BtDevice("SpinCoat", "AA:BB:CC:DD:EE:01", bonded = true, rssi = -48),
-                BtDevice("ESP32-Test", "AA:BB:CC:DD:EE:02", bonded = false, rssi = -71)
+                BtDevice("SpinCoat", "AA:BB:CC:DD:EE:01", bonded = true),
+                BtDevice("ESP32-Test", "AA:BB:CC:DD:EE:02", bonded = false)
             )
             _status.value = DeviceStatus(
-                rpmTarget = 1500, duty = 45.0, accelMs = 1200.0, status = "running_cw",
-                direction = "cw", running = true, btConnected = true, polePairs = 4,
-                speedRpm = 1487.0, motorVoltage = 24, motorCurrent = 1.32,
-                motorPower = 31.7, motorSpeed = 1492
+                rpmTarget = 1500,
+                openLoopRaw = 0,
+                controlMode = ControlMode.ClosedLoop,
+                speedPulsesPerRevolution = 4,
+                accelMs = 1200,
+                status = "running_cw",
+                direction = "cw",
+                running = true,
+                btConnected = true,
+                speedRpm = 1487.0,
+                motorVoltage = 24,
+                motorCurrent = 1.32,
+                motorPower = 31.7,
+                motorSpeed = 1492
             )
             _rpmHistory.value = List(30) { 1400.0 + (it % 7) * 15 }
             _log.value = listOf(
@@ -239,33 +249,17 @@ class MainViewModel(app: Application, previewMode: Boolean = false) : AndroidVie
     fun refreshStatus() = send(Protocol.STATUS)
 
     fun setRpm(rpm: Int) = send(Protocol.rpm(rpm))
-    fun setDuty(duty: Double) = send(Protocol.duty(duty))
+    fun setOpenLoopRaw(raw: Int) = send(Protocol.openLoopRaw(raw))
     fun setAccelMs(ms: Int) = send(Protocol.accelMs(ms))
-    fun setLengthMm(mm: Double) = send(Protocol.lengthMm(mm))
-    fun setPolePairs(count: Int) = send(Protocol.polePairs(count))
-
-    fun setPwmPin(pin: Int) {
-        if (pin !in Protocol.VALID_PWM_PINS) {
-            viewModelScope.launch { _toast.emit("Pin $pin is not a valid PWM pin") }
-            return
-        }
-        send(Protocol.pwmPin(pin))
-    }
+    fun setSpeedPulsesPerRevolution(count: Int) = send(Protocol.speedPulsesPerRevolution(count))
 
     fun setDirection(clockwise: Boolean) {
         send(Protocol.direction(clockwise))
         send(Protocol.STATUS)
     }
 
-    fun pushPassToDevice(rpm: Double, accel: Double, delayMs: Double) {
-        val current = _status.value?.passes?.size ?: 0
-        if (current >= Protocol.MAX_PASSES) {
-            viewModelScope.launch {
-                _toast.emit("Cannot add more than ${Protocol.MAX_PASSES} passes")
-            }
-            return
-        }
-        send(Protocol.addPass(rpm, accel, delayMs))
+    fun setControlMode(closedLoop: Boolean) {
+        send(Protocol.mode(closedLoop))
         send(Protocol.STATUS)
     }
 
@@ -300,18 +294,17 @@ class MainViewModel(app: Application, previewMode: Boolean = false) : AndroidVie
 
         runJob?.cancel()
         runJob = viewModelScope.launch {
-            val total = steps.sumOf { (it.accelMs + it.dwellMs).toLong() }
+            val total = steps.sumOf { (it.accelMs + it.holdMs).toLong() }
             var elapsed = 0L
 
             try {
                 steps.forEachIndexed { index, step ->
                     if (!isActive) return@launch
-
                     _runProgress.value = RunProgress(
                         recipeName = recipe.recipe.name,
                         stepIndex = index,
                         stepCount = steps.size,
-                        stepLabel = "${step.rpm} rpm - ramp ${step.accelMs} ms - hold ${step.dwellMs} ms",
+                        stepLabel = "${step.rpm} rpm - ramp ${step.accelMs}ms - hold ${step.holdMs}ms",
                         elapsedMs = elapsed,
                         totalMs = total
                     )
@@ -325,12 +318,13 @@ class MainViewModel(app: Application, previewMode: Boolean = false) : AndroidVie
                     send(Protocol.rpm(step.rpm))
                     if (index == 0) send(Protocol.START)
 
-                    val stepDuration = (step.accelMs + step.dwellMs).toLong()
+                    val stepDuration = (step.accelMs + step.holdMs).toLong()
                     val tick = 100L
                     var spent = 0L
 
                     while (spent < stepDuration) {
                         if (!isActive) return@launch
+
                         val s = _status.value
                         if (s != null && (s.emergency || s.alarm)) {
                             abortRun("Device fault during run")

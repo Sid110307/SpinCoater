@@ -37,7 +37,7 @@ data class RecipeStep(
     val position: Int,
     val rpm: Int,
     val accelMs: Int,
-    val dwellMs: Int,
+    val holdMs: Int,
     val clockwise: Boolean = true
 )
 
@@ -47,7 +47,7 @@ data class RecipeWithSteps(
     val steps: List<RecipeStep>
 ) {
     val ordered: List<RecipeStep> get() = steps.sortedBy { it.position }
-    val totalMs: Int get() = steps.sumOf { it.accelMs + it.dwellMs }
+    val totalMs: Int get() = steps.sumOf { it.accelMs + it.holdMs }
 }
 
 @Dao

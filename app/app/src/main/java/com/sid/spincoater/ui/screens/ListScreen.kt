@@ -129,7 +129,7 @@ private fun RecipeRow(
                     Text(item.recipe.name, style = MaterialTheme.typography.titleMedium)
                     Text(
                         "${item.steps.size} step${if (item.steps.size == 1) "" else "s"} - " +
-                                "${item.totalMs / 1000}s total",
+                                "${item.totalMs / 1000} s total",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -152,7 +152,7 @@ private fun RecipeRow(
             }
             item.ordered.forEachIndexed { i, step ->
                 Text(
-                    "${i + 1}. ${step.rpm} RPM - ${step.accelMs / 1000}s ramp - ${step.dwellMs / 1000}s hold - " + if (step.clockwise) "CW" else "CCW",
+                    "${i + 1}. ${step.rpm} RPM - ${step.accelMs / 1000}s ramp - ${step.holdMs / 1000}s hold - " + if (step.clockwise) "CW" else "CCW",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace
                 )
