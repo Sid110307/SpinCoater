@@ -1,8 +1,6 @@
-.DS_Store
-*.swp
-.pio/
-
 .vscode/
 .vs/
 .idea/
 
+.pio/
+.DS_Store
