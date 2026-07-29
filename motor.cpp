@@ -41,7 +41,7 @@ static bool applyMotorProfile(bool running) {
 }
 
 bool startMotor() {
-  if (isEmergencyLatched() || isAlarmLatched()) return false;
+  if (isEmergencyLatched()) return false;
   if (!applyMotorProfile(true)) return false;
 
   applyMotorRunState(true);
