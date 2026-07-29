@@ -8,7 +8,6 @@ enum class MotorStatus : uint16_t {
 	RunningClockwise = 1,
 	RunningCounterClockwise = 2,
 	EmergencyStop = 3,
-	AlarmFault = 4,
 };
 
 void setupHardware();
@@ -30,13 +29,8 @@ void setEmergencyLatched(bool latched);
 bool isEmergencyLatched();
 void clearEmergencyLatched();
 
-void setAlarmLatched(bool latched);
-bool isAlarmLatched();
-void clearAlarmLatched();
-
 /**
  Emergency stop: red
- Alarm fault: orange
  Running clockwise: green
  Running counter-clockwise: blue
  Bluetooth connected (idle): cyan
@@ -52,5 +46,4 @@ float sampleSpeedRpm();
 float getLastMeasuredSpeedRpm();
 
 void IRAM_ATTR handleEmergencyInterrupt();
-void IRAM_ATTR handleAlarmInterrupt();
 void IRAM_ATTR handleSpeedInterrupt();

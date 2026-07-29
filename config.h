@@ -17,7 +17,6 @@ extern Preferences prefs;
 
 namespace Pins {
   static constexpr uint16_t EMERGENCY = 23;
-  static constexpr uint16_t ALM = 14;
   static constexpr uint16_t SPEED = 27;
   static constexpr uint16_t RS485_RX = 16;
   static constexpr uint16_t RS485_TX = 17;

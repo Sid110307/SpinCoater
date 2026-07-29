@@ -1,6 +1,6 @@
 /**********************************************************************
 *   Spin Coater Motor Controller
-*   Ver: 0.100 | Date: 26/7/26
+*   Ver: 0.101 | Date: 29/7/26
 *   Authors: K. Bhaskar, Siddharth P Bharadwaj
 */
 
@@ -37,7 +37,9 @@ void setup() {
 
   if (!modbusBegin(config.modbusAddress)) {
     Serial.println("Modbus init failed");
-    setAlarmLatched(true);
+    setEmergencyLatched(true);
+
+    while (true);
   }
 
   // Use timer frequency 1MHz, count up
@@ -47,7 +49,6 @@ void setup() {
 
   // Trigger on FALLING (HIGH to LOW) when button is pressed
   attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY), handleEmergencyInterrupt, FALLING);
-  attachInterrupt(digitalPinToInterrupt(Pins::ALM), handleAlarmInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(Pins::SPEED), handleSpeedInterrupt, RISING);
 
   if (!BT.begin("SpinCoat")) {

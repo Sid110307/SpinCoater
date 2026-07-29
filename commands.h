@@ -16,7 +16,7 @@ estop
   Emergency stop immediately.
 
 clearfault
-  Clear emergency/alarm fault state.
+  Clear emergency fault state.
 
 rpm=<int>
   Set closed-loop target RPM.

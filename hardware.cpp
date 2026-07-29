@@ -4,13 +4,11 @@
 
 struct RuntimeState {
 	volatile bool emergencyInterruptPending = false;
-	volatile bool alarmInterruptPending = false;
 	volatile uint32_t speedPulseCount = 0;
 
 	MotorDirection motorDirection = MotorDirection::Clockwise;
 	bool motorRunning = false;
 	bool emergencyLatched = false;
-	bool alarmLatched = false;
 	bool bluetoothConnected = false;
 	bool statusLedReady = false;
 	float lastMeasuredRpm = 0.0f;
@@ -41,7 +39,6 @@ static void initializeStatusLed() {
 }
 
 void setupHardware() {
-	pinMode(Pins::ALM, INPUT_PULLUP);
 	pinMode(Pins::SPEED, INPUT_PULLUP);
 	pinMode(Pins::EMERGENCY, INPUT_PULLUP);
 
@@ -58,13 +55,10 @@ void setupHardware() {
 
 void serviceHardware() {
 	bool emergencyPending = false;
-	bool alarmPending = false;
 
 	noInterrupts();
 	emergencyPending = state.emergencyInterruptPending;
-	alarmPending = state.alarmInterruptPending;
 	state.emergencyInterruptPending = false;
-	state.alarmInterruptPending = false;
 	interrupts();
 
 	if (emergencyPending) {
@@ -74,8 +68,6 @@ void serviceHardware() {
 			setEmergencyLatched(true);
 		}
 	}
-
-	if (alarmPending) setAlarmLatched(true);
 	updateStatusLed();
 }
 
@@ -135,28 +127,8 @@ void clearEmergencyLatched() {
 	setEmergencyLatched(false);
 }
 
-void setAlarmLatched(bool latched) {
-	if (state.alarmLatched == latched) return;
-
-	state.alarmLatched = latched;
-	if (latched) {
-		applyMotorRunState(false);
-		stopMotor();
-	}
-	updateStatusLed();
-}
-
-bool isAlarmLatched() {
-	return state.alarmLatched;
-}
-
-void clearAlarmLatched() {
-	setAlarmLatched(false);
-}
-
 MotorStatus getMotorStatus() {
 	if (state.emergencyLatched) return MotorStatus::EmergencyStop;
-	if (state.alarmLatched) return MotorStatus::AlarmFault;
 	if (!state.motorRunning) return MotorStatus::Idle;
 	return state.motorDirection == MotorDirection::Clockwise ? MotorStatus::RunningClockwise : MotorStatus::RunningCounterClockwise;
 }
@@ -171,8 +143,6 @@ const char* motorStatusToString(MotorStatus status) {
 		return "running_ccw";
 	case MotorStatus::EmergencyStop:
 		return "emergency_stop";
-	case MotorStatus::AlarmFault:
-		return "alarm_fault";
 	default:
 		return "unknown";
 	}
@@ -218,7 +188,7 @@ float sampleSpeedRpm() {
 	state.speedPulseCount = 0;
 	interrupts();
 
-	if (!state.motorRunning || state.emergencyLatched || state.alarmLatched) {
+	if (!state.motorRunning || state.emergencyLatched) {
 		state.lastMeasuredRpm = 0.0f;
 		return state.lastMeasuredRpm;
 	}
@@ -233,10 +203,6 @@ float getLastMeasuredSpeedRpm() {
 
 void IRAM_ATTR handleEmergencyInterrupt() {
 	state.emergencyInterruptPending = true;
-}
-
-void IRAM_ATTR handleAlarmInterrupt() {
-	state.alarmInterruptPending = true;
 }
 
 void IRAM_ATTR handleSpeedInterrupt() {

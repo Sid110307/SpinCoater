@@ -44,7 +44,6 @@ String parse(String input) {
     }
     else if (input.equalsIgnoreCase("clearfault")) {
       clearEmergencyLatched();
-      clearAlarmLatched();
       modbusClearFault();
       stopMotor();
 
