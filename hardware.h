@@ -22,9 +22,6 @@ MotorDirection getMotorDirection();
 void applyMotorRunState(bool running);
 bool isMotorRunning();
 
-void setMotorPolePairs(int polePairs);
-int getMotorPolePairs();
-
 void setEmergencyLatched(bool latched);
 bool isEmergencyLatched();
 void clearEmergencyLatched();
@@ -40,10 +37,4 @@ void updateStatusLed();
 MotorStatus getMotorStatus();
 const char* motorStatusToString(MotorStatus status);
 
-uint32_t getSpeedPulseCount();
-void resetSpeedPulseCount();
-float sampleSpeedRpm();
-float getLastMeasuredSpeedRpm();
-
 void IRAM_ATTR handleEmergencyInterrupt();
-void IRAM_ATTR handleSpeedInterrupt();

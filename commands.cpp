@@ -23,7 +23,7 @@ static String printJSON() {
 }
 
 String parse(String input) {
-  if (input.length() == 0) return makeError("INVALID_CMD");
+  if (input.length() == 0) return makeError("INVALID_CMD", "Empty command");
   int sepIndex = input.indexOf('=');
 
   if (sepIndex == -1) {
@@ -49,7 +49,7 @@ String parse(String input) {
 
       return RESP_OK;
     }
-    return makeError("INVALID_CMD");
+    return makeError("INVALID_CMD", input.c_str());
   }
 
   String command = input.substring(0, sepIndex);
@@ -94,18 +94,6 @@ String parse(String input) {
     if (!changeAccelerationMs(accelMs)) return makeError("INVALID_VALUE", "accel_ms");
     return RESP_OK;
   }
-  else if (command.equalsIgnoreCase("speed_pulses_per_revolution")) {
-    char* endptr = nullptr;
-    long v = strtol(value.c_str(), &endptr, 10);
-    if (endptr == value.c_str() || v < 0) return makeError("INVALID_VALUE", "speed_pulses_per_revolution");
-    while (*endptr && isspace(*endptr)) ++endptr;
-    if (*endptr) return makeError("INVALID_VALUE", "speed_pulses_per_revolution");
-
-    uint16_t pulses = static_cast<uint16_t>(v);
-
-    if (!changeSpeedPulsesPerRevolution(pulses)) return makeError("INVALID_VALUE", "speed_pulses_per_revolution");
-    return RESP_OK;
-  }
   else if (command.equalsIgnoreCase("dir")) {
     if (value.equalsIgnoreCase("1") || value.equalsIgnoreCase("cw") || value.equalsIgnoreCase("clockwise")) {
       if (!changeDirection(MotorDirection::Clockwise)) return makeError("INVALID_VALUE", "dir");
@@ -130,5 +118,5 @@ String parse(String input) {
 
     return makeError("INVALID_VALUE", "mode");
   }
-  else return makeError("INVALID_CMD");
+  else return makeError("INVALID_CMD", command.c_str());
 }

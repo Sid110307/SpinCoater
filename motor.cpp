@@ -115,16 +115,6 @@ bool changeAccelerationMs(uint16_t accelerationMs) {
   return true;
 }
 
-bool changeSpeedPulsesPerRevolution(uint16_t pulsesPerRevolution) {
-  if (pulsesPerRevolution == 0) return false;
-  if (config.speedPulsesPerRevolution == pulsesPerRevolution) return true;
-
-  config.speedPulsesPerRevolution = pulsesPerRevolution;
-  saveConfig();
-
-  return true;
-}
-
 bool changeDirection(MotorDirection direction) {
   if (config.direction != direction) {
     config.direction = direction;

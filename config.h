@@ -16,8 +16,10 @@ enum class ControlMode : uint8_t {
 extern Preferences prefs;
 
 namespace Pins {
-  static constexpr uint16_t EMERGENCY = 23;
-  static constexpr uint16_t SPEED = 27;
+  static constexpr uint16_t EMERGENCY = 15;
+  static constexpr uint16_t SPEED = 2;
+  static constexpr uint16_t LIMIT_SWITCH = 14;
+  static constexpr uint16_t BUZZER = 4;
   static constexpr uint16_t RS485_RX = 16;
   static constexpr uint16_t RS485_TX = 17;
   static constexpr uint16_t RS485_DE_RE = 5;
@@ -32,7 +34,6 @@ static constexpr MotorDirection DEFAULT_DIRECTION = MotorDirection::Clockwise;
 static constexpr uint16_t DEFAULT_TARGET_RPM = 1200;
 static constexpr uint16_t DEFAULT_OPEN_LOOP_COMMAND_RAW = 405;
 static constexpr uint16_t DEFAULT_ACCELERATION_MS = 300;
-static constexpr uint16_t DEFAULT_SPEED_PULSES_PER_REVOLUTION = 4;
 
 static constexpr uint32_t CONFIG_VERSION = 4;  // Change if config params update
 
@@ -50,7 +51,6 @@ struct MotorConfig {
   uint16_t targetRpm;
   uint16_t openLoopCommandRaw;
   uint16_t accelerationMs;
-  uint16_t speedPulsesPerRevolution;
 };
 
 extern MotorConfig config;
