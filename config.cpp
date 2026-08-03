@@ -40,5 +40,4 @@ void setDefaultConfig() {
   config.targetRpm = DEFAULT_TARGET_RPM;
   config.openLoopCommandRaw = DEFAULT_OPEN_LOOP_COMMAND_RAW;
   config.accelerationMs = DEFAULT_ACCELERATION_MS;
-  config.speedPulsesPerRevolution = DEFAULT_SPEED_PULSES_PER_REVOLUTION;
 }

@@ -15,7 +15,6 @@ static const char* controlModeToString(ControlMode controlMode) {
 
 static void addPinMap(JsonObject pins) {
 	pins["emergency"] = Pins::EMERGENCY;
-	pins["speed"] = Pins::SPEED;
 	pins["rs485_rx"] = Pins::RS485_RX;
 	pins["rs485_tx"] = Pins::RS485_TX;
 	pins["rs485_de_re"] = Pins::RS485_DE_RE;
@@ -45,13 +44,10 @@ String getJSONString() {
 	doc["target_rpm"] = config.targetRpm;
 	doc["open_loop_raw"] = config.openLoopCommandRaw;
 	doc["accel_ms"] = config.accelerationMs;
-	doc["speed_pulses_per_revolution"] = config.speedPulsesPerRevolution;
 	doc["status"] = motorStatusToString(getMotorStatus());
 	doc["running"] = isMotorRunning();
 	doc["emergency"] = isEmergencyLatched();
 	doc["bt_connected"] = isBluetoothConnected();
-	doc["speed_pulses"] = getSpeedPulseCount();
-	doc["speed_rpm"] = getLastMeasuredSpeedRpm();
 	doc["motor_voltage"] = motorVoltage;
 	doc["motor_current"] = static_cast<float>(motorCurrent) / 100.0f;
 	doc["motor_power"] = static_cast<float>(motorPower) / 10.0f;

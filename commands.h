@@ -33,11 +33,6 @@ accel_ms=<int>
   Range: 300..15000
   Example: accel_ms=500
 
-speed_pulses_per_revolution=<int>
-  Set speed sensor pulses per revolution.
-  Range: >= 1
-  Example: speed_pulses_per_revolution=4
-
 dir=<1|0>
   Set motor direction output (1: CW, 0: CCW).
   Example: dir=1

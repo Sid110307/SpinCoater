@@ -1,6 +1,6 @@
 /**********************************************************************
 *   Spin Coater Motor Controller
-*   Ver: 0.101 | Date: 29/7/26
+*   Ver: 0.102 | Date: 3/8/26
 *   Authors: K. Bhaskar, Siddharth P Bharadwaj
 */
 
@@ -18,16 +18,9 @@ BluetoothSerial BT;
 Preferences prefs;
 MotorConfig config;
 
-volatile bool sampleDue = false;
-hw_timer_t* timer = NULL;
-
 static constexpr size_t COMMAND_BUFFER_SIZE = 128;
 char bluetoothCommandBuffer[COMMAND_BUFFER_SIZE];
 size_t bluetoothCommandLength = 0;
-
-void IRAM_ATTR onTimer() {
-  sampleDue = true;
-}
 
 void setup() {
   loadConfig();
@@ -42,14 +35,9 @@ void setup() {
     while (true);
   }
 
-  // Use timer frequency 1MHz, count up
-  timer = timerBegin(TIMER_FREQUENCY);
-  timerAttachInterrupt(timer, &onTimer);
-  timerAlarm(timer, TIMER_INTERVAL_US, true, 0);
-
   // Trigger on FALLING (HIGH to LOW) when button is pressed
   attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY), handleEmergencyInterrupt, FALLING);
-  attachInterrupt(digitalPinToInterrupt(Pins::SPEED), handleSpeedInterrupt, RISING);
+  attachInterrupt(digitalPinToInterrupt(Pins::LIMIT_SWITCH), handleEmergencyInterrupt, FALLING);
 
   if (!BT.begin("SpinCoat")) {
     Serial.println("BT begin failed");
@@ -91,11 +79,6 @@ void loop() {
       bluetoothCommandBuffer[bluetoothCommandLength++] = incoming;
     }
     else btOverflow = true;
-  }
-
-  if (sampleDue) {
-    sampleSpeedRpm();
-    sampleDue = false;
   }
 
   delay(1);

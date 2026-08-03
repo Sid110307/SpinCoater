@@ -4,14 +4,12 @@
 
 struct RuntimeState {
 	volatile bool emergencyInterruptPending = false;
-	volatile uint32_t speedPulseCount = 0;
 
 	MotorDirection motorDirection = MotorDirection::Clockwise;
 	bool motorRunning = false;
 	bool emergencyLatched = false;
 	bool bluetoothConnected = false;
 	bool statusLedReady = false;
-	float lastMeasuredRpm = 0.0f;
 };
 
 static constexpr int LEDC_FREQ = 5000;
@@ -39,8 +37,10 @@ static void initializeStatusLed() {
 }
 
 void setupHardware() {
-	pinMode(Pins::SPEED, INPUT_PULLUP);
 	pinMode(Pins::EMERGENCY, INPUT_PULLUP);
+	pinMode(Pins::LIMIT_SWITCH, INPUT_PULLUP);
+	pinMode(Pins::BUZZER, OUTPUT);
+	digitalWrite(Pins::BUZZER, LOW);
 
 	initializeStatusLed();
 	writeStatusLed(255, 0, 0);
@@ -98,14 +98,6 @@ void applyMotorRunState(bool running) {
 
 bool isMotorRunning() {
 	return state.motorRunning;
-}
-
-void setMotorPolePairs(int polePairs) {
-	if (polePairs > 0) config.speedPulsesPerRevolution = static_cast<uint16_t>(polePairs);
-}
-
-int getMotorPolePairs() {
-	return config.speedPulsesPerRevolution > 0 ? config.speedPulsesPerRevolution : DEFAULT_SPEED_PULSES_PER_REVOLUTION;
 }
 
 void setEmergencyLatched(bool latched) {
@@ -166,45 +158,6 @@ void updateStatusLed() {
 	}
 }
 
-uint32_t getSpeedPulseCount() {
-	noInterrupts();
-	uint32_t count = state.speedPulseCount;
-	interrupts();
-
-	return count;
-}
-
-void resetSpeedPulseCount() {
-	noInterrupts();
-	state.speedPulseCount = 0;
-	interrupts();
-}
-
-float sampleSpeedRpm() {
-	uint32_t pulseCount = 0;
-
-	noInterrupts();
-	pulseCount = state.speedPulseCount;
-	state.speedPulseCount = 0;
-	interrupts();
-
-	if (!state.motorRunning || state.emergencyLatched) {
-		state.lastMeasuredRpm = 0.0f;
-		return state.lastMeasuredRpm;
-	}
-
-	state.lastMeasuredRpm = (static_cast<float>(pulseCount) * 60.0f) / static_cast<float>(getMotorPolePairs());
-	return state.lastMeasuredRpm;
-}
-
-float getLastMeasuredSpeedRpm() {
-	return state.lastMeasuredRpm;
-}
-
 void IRAM_ATTR handleEmergencyInterrupt() {
 	state.emergencyInterruptPending = true;
-}
-
-void IRAM_ATTR handleSpeedInterrupt() {
-	++state.speedPulseCount;
 }
