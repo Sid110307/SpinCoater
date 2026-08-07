@@ -21,8 +21,8 @@ void loadConfig() {
       prefs.clear();
       setDefaultConfig();
     }
-  }
-  else setDefaultConfig();
+  } else
+    setDefaultConfig();
   prefs.end();
 }
 

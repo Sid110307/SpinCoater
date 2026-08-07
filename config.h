@@ -16,16 +16,16 @@ enum class ControlMode : uint8_t {
 extern Preferences prefs;
 
 namespace Pins {
-  static constexpr uint16_t EMERGENCY = 15;
-  static constexpr uint16_t SPEED = 2;
-  static constexpr uint16_t LIMIT_SWITCH = 14;
-  static constexpr uint16_t BUZZER = 4;
-  static constexpr uint16_t RS485_RX = 16;
-  static constexpr uint16_t RS485_TX = 17;
-  static constexpr uint16_t RS485_DE_RE = 5;
-  static constexpr uint16_t LED_R = 21;
-  static constexpr uint16_t LED_G = 19;
-  static constexpr uint16_t LED_B = 18;
+static constexpr uint16_t EMERGENCY = 15;
+static constexpr uint16_t SPEED = 2;
+static constexpr uint16_t LIMIT_SWITCH = 14;
+static constexpr uint16_t BUZZER = 4;
+static constexpr uint16_t RS485_RX = 16;
+static constexpr uint16_t RS485_TX = 17;
+static constexpr uint16_t RS485_DE_RE = 5;
+static constexpr uint16_t LED_R = 21;
+static constexpr uint16_t LED_G = 19;
+static constexpr uint16_t LED_B = 18;
 }
 
 static constexpr uint8_t DEFAULT_MODBUS_ADDRESS = 1;

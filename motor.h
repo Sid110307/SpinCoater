@@ -4,6 +4,7 @@
 
 bool startMotor();
 void stopMotor();
+void emergencyStopMotor();
 
 bool changeControlMode(ControlMode controlMode);
 bool changeTargetRpm(uint16_t rpm);

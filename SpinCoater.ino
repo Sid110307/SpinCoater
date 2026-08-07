@@ -1,18 +1,18 @@
 /**********************************************************************
-*   Spin Coater Motor Controller
-*   Ver: 0.102 | Date: 3/8/26
-*   Authors: K. Bhaskar, Siddharth P Bharadwaj
-*/
+ *   Spin Coater Motor Controller
+ *   Ver: 0.103 | Date: 7/8/26
+ *   Authors: K. Bhaskar, Siddharth P Bharadwaj
+ */
 
 #include <Arduino.h>
 
-#include "globals.h"
-#include "config.h"
-#include "motor.h"
-#include "modbus.h"
-#include "io.h"
 #include "commands.h"
+#include "config.h"
+#include "globals.h"
 #include "hardware.h"
+#include "io.h"
+#include "modbus.h"
+#include "motor.h"
 
 BluetoothSerial BT;
 Preferences prefs;
@@ -32,18 +32,20 @@ void setup() {
     Serial.println("Modbus init failed");
     setEmergencyLatched(true);
 
-    while (true);
+    while (true)
+      ;
   }
 
   // Trigger on FALLING (HIGH to LOW) when button is pressed
-  attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY), handleEmergencyInterrupt, FALLING);
-  attachInterrupt(digitalPinToInterrupt(Pins::LIMIT_SWITCH), handleEmergencyInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY),
+                  handleEmergencyInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(Pins::LIMIT_SWITCH),
+                  handleEmergencyInterrupt, FALLING);
 
   if (!BT.begin("SpinCoat")) {
     Serial.println("BT begin failed");
     setBluetoothConnected(false);
-  }
-  else {
+  } else {
     BT.setPin("123456", 6);
     BT.println("Ready");
   }
@@ -59,13 +61,13 @@ void loop() {
   while (BT.available() > 0) {
     char incoming = static_cast<char>(BT.read());
 
-    if (incoming == '\r') continue;
+    if (incoming == '\r')
+      continue;
     if (incoming == '\n') {
       bluetoothCommandBuffer[bluetoothCommandLength] = '\0';
       if (btOverflow) {
         BT.println("{\"error\":\"BUFFER_OVERFLOW\"}");
-      }
-      else {
+      } else {
         String response = parse(String(bluetoothCommandBuffer));
         BT.println(response);
       }
@@ -77,8 +79,8 @@ void loop() {
 
     if (bluetoothCommandLength < COMMAND_BUFFER_SIZE - 1) {
       bluetoothCommandBuffer[bluetoothCommandLength++] = incoming;
-    }
-    else btOverflow = true;
+    } else
+      btOverflow = true;
   }
 
   delay(1);

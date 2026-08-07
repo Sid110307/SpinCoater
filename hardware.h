@@ -1,13 +1,13 @@
 #pragma once
 
-#include <Arduino.h>
 #include "config.h"
+#include <Arduino.h>
 
 enum class MotorStatus : uint16_t {
-	Idle = 0,
-	RunningClockwise = 1,
-	RunningCounterClockwise = 2,
-	EmergencyStop = 3,
+  Idle = 0,
+  RunningClockwise = 1,
+  RunningCounterClockwise = 2,
+  EmergencyStop = 3,
 };
 
 void setupHardware();
@@ -35,6 +35,6 @@ void clearEmergencyLatched();
  */
 void updateStatusLed();
 MotorStatus getMotorStatus();
-const char* motorStatusToString(MotorStatus status);
+const char *motorStatusToString(MotorStatus status);
 
 void IRAM_ATTR handleEmergencyInterrupt();
