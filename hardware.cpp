@@ -17,6 +17,14 @@ static constexpr int LEDC_RESOLUTION = 8;
 
 static RuntimeState state;
 
+static bool safetyBypassEnabled() {
+  return BYPASS_SAFETY != 0;
+}
+
+static bool isPhysicalSafetyInputActive(uint16_t pin) {
+  return digitalRead(pin) == LOW;
+}
+
 static void writeStatusLed(uint16_t red, uint16_t green, uint16_t blue) {
   if (!state.statusLedReady) return;
   ledcWrite(Pins::LED_R, red);
@@ -39,6 +47,7 @@ void setupHardware() {
   pinMode(Pins::LIMIT_SWITCH, INPUT_PULLUP);
   pinMode(Pins::BUZZER, OUTPUT);
   digitalWrite(Pins::BUZZER, LOW);
+  if (physicalSafetyInputsActive()) setEmergencyLatched(true);
 
   initializeStatusLed();
   writeStatusLed(255, 0, 0);
@@ -117,8 +126,28 @@ bool isEmergencyLatched() {
   return v;
 }
 
-void clearEmergencyLatched() {
+bool physicalSafetyInputsActive() {
+  if (safetyBypassEnabled()) return false;
+  return isPhysicalSafetyInputActive(Pins::EMERGENCY) || isPhysicalSafetyInputActive(Pins::LIMIT_SWITCH);
+}
+
+bool physicalSafetyInputsInactiveFor(uint32_t stableMs) {
+  if (safetyBypassEnabled()) return true;
+
+  uint32_t startMs = millis();
+  while ((millis() - startMs) < stableMs) {
+    if (physicalSafetyInputsActive()) return false;
+    delay(10);
+  }
+
+  return !physicalSafetyInputsActive();
+}
+
+bool clearEmergencyLatched() {
+  if (!physicalSafetyInputsInactiveFor(SAFETY_CLEAR_STABLE_MS)) return false;
+
   setEmergencyLatched(false);
+  return true;
 }
 
 MotorStatus getMotorStatus() {
@@ -127,17 +156,17 @@ MotorStatus getMotorStatus() {
   if (s.emergencyLatched) return MotorStatus::EmergencyStop;
   if (!s.motorRunning) return MotorStatus::Idle;
   return s.direction == MotorDirection::Clockwise
-           ? MotorStatus::RunningClockwise
-           : MotorStatus::RunningCounterClockwise;
+    ? MotorStatus::RunningClockwise
+    : MotorStatus::RunningCounterClockwise;
 }
 
-const char *motorStatusToString(MotorStatus status) {
+const char* motorStatusToString(MotorStatus status) {
   switch (status) {
-    case MotorStatus::Idle: return "idle";
-    case MotorStatus::RunningClockwise: return "running_cw";
-    case MotorStatus::RunningCounterClockwise: return "running_ccw";
-    case MotorStatus::EmergencyStop: return "emergency_stop";
-    default: return "unknown";
+  case MotorStatus::Idle: return "idle";
+  case MotorStatus::RunningClockwise: return "running_cw";
+  case MotorStatus::RunningCounterClockwise: return "running_ccw";
+  case MotorStatus::EmergencyStop: return "emergency_stop";
+  default: return "unknown";
   }
 }
 
@@ -148,24 +177,24 @@ void updateStatusLed() {
     status = MotorStatus::EmergencyStop;
   else if (s.motorRunning)
     status = s.direction == MotorDirection::Clockwise
-               ? MotorStatus::RunningClockwise
-               : MotorStatus::RunningCounterClockwise;
+    ? MotorStatus::RunningClockwise
+    : MotorStatus::RunningCounterClockwise;
 
   switch (status) {
-    case MotorStatus::EmergencyStop:
-      writeStatusLed(255, 0, 0);
-      break;
-    case MotorStatus::RunningClockwise:
-    case MotorStatus::RunningCounterClockwise:
-      writeStatusLed(0, 255, 0);
-      break;
-    case MotorStatus::Idle:
-    default:
-      if (s.bluetoothConnected)
-        writeStatusLed(0, 192, 192);
-      else
-        writeStatusLed(255, 32, 0);
-      break;
+  case MotorStatus::EmergencyStop:
+    writeStatusLed(255, 0, 0);
+    break;
+  case MotorStatus::RunningClockwise:
+  case MotorStatus::RunningCounterClockwise:
+    writeStatusLed(0, 255, 0);
+    break;
+  case MotorStatus::Idle:
+  default:
+    if (s.bluetoothConnected)
+      writeStatusLed(0, 192, 192);
+    else
+      writeStatusLed(255, 32, 0);
+    break;
   }
 }
 

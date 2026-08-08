@@ -46,11 +46,12 @@ bool motorConfigureForRun(uint16_t accelMs) {
 }
 
 bool motorRun(bool running) {
+  if (running && physicalSafetyInputsActive()) return false;
   return mbCall(MbOp::Run, running ? 1 : 0);
 }
 
 bool startMotor() {
-  if (isEmergencyLatched()) return false;
+  if (isEmergencyLatched() || physicalSafetyInputsActive()) return false;
   if (!motorConfigureForRun(config.accelerationMs)) return false;
 
   uint16_t setpoint = config.controlMode == ControlMode::ClosedLoop

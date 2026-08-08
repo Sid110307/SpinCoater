@@ -24,8 +24,8 @@ static volatile bool emergencyLatched = false;
 static bool refreshTelemetry() {
   uint16_t a[2] = { 0, 0 };
   uint16_t b[3] = { 0, 0, 0 };
-  bool okA = modbusReadBlock(0x4038, 2, a);
-  bool okB = modbusReadBlock(0x4040, 3, b);
+  bool okA = modbusReadBlock(0x0026, 2, a);
+  bool okB = modbusReadBlock(0x0028, 3, b);
 
   if (telemetryMutex) xSemaphoreTake(telemetryMutex, portMAX_DELAY);
   if (okA) {
@@ -44,24 +44,24 @@ static bool refreshTelemetry() {
   return okA && okB;
 }
 
-static bool execute(const MbRequest &r) {
+static bool execute(const MbRequest& r) {
   switch (r.op) {
-    case MbOp::CommSource: return modbusUseCommunicationControl();
-    case MbOp::IoSource: return modbusUseIoControl();
-    case MbOp::ControlMode: return modbusSetControlMode(r.arg != 0);
-    case MbOp::ClosedLoopRpm: return modbusSetClosedLoopRpm(r.arg);
-    case MbOp::OpenLoopPercent: return modbusSetOpenLoopSpeedPercent(r.arg);
-    case MbOp::AccelMs: return modbusSetAccelTimeMs(r.arg);
-    case MbOp::Run: return modbusSetRun(r.arg != 0);
-    case MbOp::Direction: return modbusSetDirection(r.arg != 0);
-    case MbOp::Brake: return modbusSetBrake(r.arg != 0);
-    case MbOp::ClearFault: return modbusClearFault();
-    case MbOp::RefreshTelemetry: return refreshTelemetry();
+  case MbOp::CommSource: return modbusUseCommunicationControl();
+  case MbOp::IoSource: return modbusUseIoControl();
+  case MbOp::ControlMode: return modbusSetControlMode(r.arg != 0);
+  case MbOp::ClosedLoopRpm: return modbusSetClosedLoopRpm(r.arg);
+  case MbOp::OpenLoopPercent: return modbusSetOpenLoopSpeedPercent(r.arg);
+  case MbOp::AccelMs: return modbusSetAccelTimeMs(r.arg);
+  case MbOp::Run: return modbusSetRun(r.arg != 0);
+  case MbOp::Direction: return modbusSetDirection(r.arg != 0);
+  case MbOp::Brake: return modbusSetBrake(r.arg != 0);
+  case MbOp::ClearFault: return modbusClearFault();
+  case MbOp::RefreshTelemetry: return refreshTelemetry();
   }
   return false;
 }
 
-static void modbusTaskFn(void *) {
+static void modbusTaskFn(void*) {
   MbRequest r;
   for (;;) {
     // emergency is first priority
@@ -83,7 +83,7 @@ static void modbusTaskFn(void *) {
   }
 }
 
-static void telemetryTaskFn(void *) {
+static void telemetryTaskFn(void*) {
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(TELEMETRY_PERIOD_MS));
     if (!emergencyLatched) mbCall(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));
