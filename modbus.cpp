@@ -24,7 +24,7 @@ static uint32_t statMinUs = UINT32_MAX;
 static uint32_t statMaxUs = 0;
 static uint64_t statSumUs = 0;
 
-static uint16_t crc16(const uint8_t *data, size_t length) {
+static uint16_t crc16(const uint8_t* data, size_t length) {
   uint16_t crc = 0xFFFF;
   for (size_t i = 0; i < length; ++i) {
     crc ^= data[i];
@@ -32,14 +32,15 @@ static uint16_t crc16(const uint8_t *data, size_t length) {
       if (crc & 0x0001) {
         crc >>= 1;
         crc ^= 0xA001;
-      } else
+      }
+      else
         crc >>= 1;
     }
   }
   return crc;
 }
 
-static size_t buildFrame(const uint8_t *payload, size_t payloadLength, uint8_t *frame) {
+static size_t buildFrame(const uint8_t* payload, size_t payloadLength, uint8_t* frame) {
   for (size_t i = 0; i < payloadLength; ++i) frame[i] = payload[i];
 
   uint16_t crc = crc16(payload, payloadLength);
@@ -52,7 +53,7 @@ static void clearRxBuffer() {
   while (ModbusSerial.available() > 0) ModbusSerial.read();
 }
 
-static bool tx(const uint8_t *request, size_t requestLength, uint8_t *response, size_t responseCapacity, size_t &responseLength) {
+static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, size_t responseCapacity, size_t& responseLength) {
   if (!modbusReady) return false;
   uint32_t t0 = micros();
 
@@ -139,7 +140,7 @@ static bool writeRegisterInternal(uint16_t reg, uint16_t value) {
   return response[2] == payload[2] && response[3] == payload[3] && response[4] == payload[4] && response[5] == payload[5];
 }
 
-static bool readRegistersInternal(uint16_t reg, uint8_t count, uint16_t *out) {
+static bool readRegistersInternal(uint16_t reg, uint8_t count, uint16_t* out) {
   uint8_t payload[6];
   payload[0] = static_cast<uint8_t>(modbusSlaveAddress);
   payload[1] = 0x03;
@@ -187,59 +188,59 @@ bool modbusIsReady() {
 }
 
 bool modbusUseCommunicationControl() {
-  return writeRegisterInternal(0x4037, 1);
+  return writeRegisterInternal(0x0025, 1);
 }
 bool modbusUseIoControl() {
-  return writeRegisterInternal(0x4037, 0);
+  return writeRegisterInternal(0x0025, 0);
 }
 bool modbusSetControlMode(bool closedLoop) {
-  return writeRegisterInternal(0x4005, closedLoop ? 1 : 0);
+  return writeRegisterInternal(0x0005, closedLoop ? 1 : 0);
 }
 bool modbusSetClosedLoopRpm(uint16_t rpm) {
-  return writeRegisterInternal(0x4006, rpm);
+  return writeRegisterInternal(0x0006, rpm);
 }
 bool modbusSetOpenLoopSpeedPercent(uint16_t percent) {
-  return writeRegisterInternal(0x4007, percent);
+  return writeRegisterInternal(0x0007, percent);
 }
 bool modbusSetAccelTimeMs(uint16_t ms) {
-  return writeRegisterInternal(0x4011, ms);
+  return writeRegisterInternal(0x000B, ms);
 }
 bool modbusSetRun(bool running) {
-  return writeRegisterInternal(0x4034, running ? 1 : 0);
+  return writeRegisterInternal(0x0022, running ? 1 : 0);
 }
 bool modbusSetDirection(bool clockwise) {
-  return writeRegisterInternal(0x4035, clockwise ? 0 : 1);
+  return writeRegisterInternal(0x0023, clockwise ? 0 : 1);
 }
 bool modbusSetBrake(bool brakeOn) {
-  return writeRegisterInternal(0x4036, brakeOn ? 1 : 0);
+  return writeRegisterInternal(0x0024, brakeOn ? 1 : 0);
 }
 bool modbusClearFault() {
-  return writeRegisterInternal(0x4043, 1);
+  return writeRegisterInternal(0x002B, 1);
 }
 
-bool modbusReadVoltage(uint16_t &value) {
-  return readRegistersInternal(0x4038, 1, &value);
+bool modbusReadVoltage(uint16_t& value) {
+  return readRegistersInternal(0x0026, 1, &value);
 }
-bool modbusReadCurrent(uint16_t &value) {
-  return readRegistersInternal(0x4039, 1, &value);
+bool modbusReadCurrent(uint16_t& value) {
+  return readRegistersInternal(0x0027, 1, &value);
 }
-bool modbusReadPower(uint16_t &value) {
-  return readRegistersInternal(0x4040, 1, &value);
+bool modbusReadPower(uint16_t& value) {
+  return readRegistersInternal(0x0028, 1, &value);
 }
-bool modbusReadSpeed(uint16_t &value) {
-  return readRegistersInternal(0x4041, 1, &value);
+bool modbusReadSpeed(uint16_t& value) {
+  return readRegistersInternal(0x0029, 1, &value);
 }
-bool modbusReadFault(uint16_t &value) {
-  return readRegistersInternal(0x4042, 1, &value);
+bool modbusReadFault(uint16_t& value) {
+  return readRegistersInternal(0x002A, 1, &value);
 }
 
-bool modbusReadBlock(uint16_t startReg, uint8_t count, uint16_t *out) {
+bool modbusReadBlock(uint16_t startReg, uint8_t count, uint16_t* out) {
   if (count == 0 || count > 32) return false;
   return readRegistersInternal(startReg, count, out);
 }
 
-void modbusGetStats(uint32_t &count, uint32_t &timeouts, uint32_t &crcErrors, uint32_t &lastUs,
-                    uint32_t &minUs, uint32_t &maxUs, uint32_t &avgUs) {
+void modbusGetStats(uint32_t& count, uint32_t& timeouts, uint32_t& crcErrors, uint32_t& lastUs,
+  uint32_t& minUs, uint32_t& maxUs, uint32_t& avgUs) {
   count = statCount;
   timeouts = statTimeouts;
   crcErrors = statCrcErrors;

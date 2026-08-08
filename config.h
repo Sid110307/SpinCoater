@@ -16,16 +16,16 @@ enum class ControlMode : uint8_t {
 extern Preferences prefs;
 
 namespace Pins {
-static constexpr uint16_t EMERGENCY = 15;
-static constexpr uint16_t SPEED = 2;
-static constexpr uint16_t LIMIT_SWITCH = 14;
-static constexpr uint16_t BUZZER = 4;
-static constexpr uint16_t RS485_RX = 16;
-static constexpr uint16_t RS485_TX = 17;
-static constexpr uint16_t RS485_DE_RE = 5;
-static constexpr uint16_t LED_R = 21;
-static constexpr uint16_t LED_G = 19;
-static constexpr uint16_t LED_B = 18;
+  static constexpr uint16_t EMERGENCY = 15;
+  static constexpr uint16_t SPEED = 2;
+  static constexpr uint16_t LIMIT_SWITCH = 14;
+  static constexpr uint16_t BUZZER = 4;
+  static constexpr uint16_t RS485_RX = 16;
+  static constexpr uint16_t RS485_TX = 17;
+  static constexpr uint16_t RS485_DE_RE = 5;
+  static constexpr uint16_t LED_R = 21;
+  static constexpr uint16_t LED_G = 19;
+  static constexpr uint16_t LED_B = 18;
 }
 
 static constexpr uint8_t DEFAULT_MODBUS_ADDRESS = 1;
@@ -38,8 +38,13 @@ static constexpr uint16_t DEFAULT_ACCELERATION_MS = 300;
 static constexpr uint32_t CONFIG_VERSION = 4;  // Change if config params update
 
 static constexpr int DEBOUNCE_MS = 200;
+static constexpr uint32_t SAFETY_CLEAR_STABLE_MS = 200;
 static constexpr uint32_t TIMER_FREQUENCY = 1000000;    // 1 MHz
 static constexpr uint32_t TIMER_INTERVAL_US = 1000000;  // 1,000,000 us = 1s
+
+#ifndef BYPASS_SAFETY
+#define BYPASS_SAFETY 0
+#endif
 
 static constexpr uint16_t CLOSED_LOOP_RPM_MIN = 200;
 static constexpr uint16_t CLOSED_LOOP_RPM_MAX = 4000;

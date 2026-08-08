@@ -57,7 +57,7 @@ String parse(String input) {
       setEmergencyLatched(true);
       return RESP_OK;
     } else if (input.equalsIgnoreCase("clearfault")) {
-      clearEmergencyLatched();
+      if (!clearEmergencyLatched()) return makeError("SAFETY_LOCKED");
       mbCall(MbOp::ClearFault);
       stopMotor();
 

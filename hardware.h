@@ -30,7 +30,10 @@ bool isMotorRunning();
 
 void setEmergencyLatched(bool latched);
 bool isEmergencyLatched();
-void clearEmergencyLatched();
+bool clearEmergencyLatched();
+
+bool physicalSafetyInputsActive();
+bool physicalSafetyInputsInactiveFor(uint32_t stableMs);
 
 RuntimeSnapshot getRuntimeSnapshot();
 

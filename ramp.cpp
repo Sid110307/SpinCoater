@@ -64,7 +64,7 @@ static void rampTaskFn(void *) {
       vTaskDelay(pdMS_TO_TICKS(20));
       continue;
     }
-    if (mbIsEmergency() || isEmergencyLatched()) {
+    if (mbIsEmergency() || isEmergencyLatched() || physicalSafetyInputsActive()) {
       active = false;
       continue;
     }
@@ -185,7 +185,7 @@ bool rampBuilderAdd(uint16_t target, uint32_t durationMs) {
 }
 
 bool rampStart() {
-  if (isEmergencyLatched()) return false;
+  if (isEmergencyLatched() || physicalSafetyInputsActive()) return false;
   lock();
 
   if (builderPending && builder.count > 0) {
