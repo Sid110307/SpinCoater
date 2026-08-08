@@ -40,5 +40,27 @@ dir=<1|0>
 mode=<closed_loop|open_loop>
   Set motor control mode.
   Example: mode=closed_loop
+
+ramp=<[start|]target,durationMs;target,durationMs;...>
+  Start a ramp curve (lerp from the previous point to <target> over <durationMs>.
+  "<start>|" sets the initial value (default 0).
+  Example: ramp=200,1000;1500,3000;1500,5000;0,2000
+           (0 to 200 in 1s, to 1500 in 3s, hold 5s, to 0 in 2s)
+
+rampload=<[start|]target,durationMs;target,durationMs;...>
+  Upload a curve without starting it.
+
+rampstart
+  Start the loaded curve.
+
+rampstop
+  Stop the ramp engine (stay at last setpoint).
+
+profile
+  Print RS485 transaction timing stats as JSON (count/min/max/avg us,
+  timeouts, crc_errors).
+
+profilereset
+  Reset the profiling counters.
 */
 String parse(String input);

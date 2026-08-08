@@ -10,8 +10,14 @@ enum class MotorStatus : uint16_t {
   EmergencyStop = 3,
 };
 
+struct RuntimeSnapshot {
+  MotorDirection direction;
+  bool motorRunning;
+  bool emergencyLatched;
+  bool bluetoothConnected;
+};
+
 void setupHardware();
-void serviceHardware();
 
 void setBluetoothConnected(bool connected);
 bool isBluetoothConnected();
@@ -26,12 +32,13 @@ void setEmergencyLatched(bool latched);
 bool isEmergencyLatched();
 void clearEmergencyLatched();
 
+RuntimeSnapshot getRuntimeSnapshot();
+
 /**
  Emergency stop: red
- Running clockwise: green
- Running counter-clockwise: blue
+ Running: green
  Bluetooth connected (idle): cyan
- Idle: off
+ Idle (no BT): dim amber
  */
 void updateStatusLed();
 MotorStatus getMotorStatus();
