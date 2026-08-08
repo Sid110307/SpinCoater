@@ -41,6 +41,19 @@ static constexpr int DEBOUNCE_MS = 200;
 static constexpr uint32_t TIMER_FREQUENCY = 1000000;    // 1 MHz
 static constexpr uint32_t TIMER_INTERVAL_US = 1000000;  // 1,000,000 us = 1s
 
+static constexpr uint16_t CLOSED_LOOP_RPM_MIN = 200;
+static constexpr uint16_t CLOSED_LOOP_RPM_MAX = 4000;
+static constexpr uint16_t OPEN_LOOP_RAW_MIN = 0;
+static constexpr uint16_t OPEN_LOOP_RAW_MAX = 1000;
+static constexpr uint16_t ACCEL_MS_MIN = 300;
+static constexpr uint16_t ACCEL_MS_MAX = 15000;
+
+static constexpr uint8_t RAMP_MAX_SEGMENTS = 32;
+static constexpr uint16_t RAMP_TICK_MS = 20;
+
+static constexpr uint16_t TELEMETRY_PERIOD_MS = 200;
+static constexpr uint16_t LED_REFRESH_MS = 50;
+
 struct MotorConfig {
   uint32_t version;
 

@@ -1,46 +1,33 @@
 /**********************************************************************
  *   Spin Coater Motor Controller
- *   Ver: 0.103 | Date: 7/8/26
+ *   Ver: 0.200 | Date: 8/8/26
  *   Authors: K. Bhaskar, Siddharth P Bharadwaj
  */
 
 #include <Arduino.h>
 
-#include "commands.h"
 #include "config.h"
 #include "globals.h"
 #include "hardware.h"
-#include "io.h"
 #include "modbus.h"
-#include "motor.h"
+#include "rtos.h"
 
 BluetoothSerial BT;
 Preferences prefs;
 MotorConfig config;
 
-static constexpr size_t COMMAND_BUFFER_SIZE = 128;
-char bluetoothCommandBuffer[COMMAND_BUFFER_SIZE];
-size_t bluetoothCommandLength = 0;
-
 void setup() {
+  Serial.begin(115200);
+
   loadConfig();
   setupHardware();
-  Serial.begin(115200);
   setMotorDirection(config.direction);
 
   if (!modbusBegin(config.modbusAddress)) {
     Serial.println("Modbus init failed");
     setEmergencyLatched(true);
-
-    while (true)
-      ;
+    while (true) delay(1000);
   }
-
-  // Trigger on FALLING (HIGH to LOW) when button is pressed
-  attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY),
-                  handleEmergencyInterrupt, FALLING);
-  attachInterrupt(digitalPinToInterrupt(Pins::LIMIT_SWITCH),
-                  handleEmergencyInterrupt, FALLING);
 
   if (!BT.begin("SpinCoat")) {
     Serial.println("BT begin failed");
@@ -50,38 +37,14 @@ void setup() {
     BT.println("Ready");
   }
 
+  rtosBegin();
+
+  attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY), handleEmergencyInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(Pins::LIMIT_SWITCH), handleEmergencyInterrupt, FALLING);
+
   Serial.println("Ready");
 }
 
 void loop() {
-  setBluetoothConnected(BT.hasClient());
-  serviceHardware();
-
-  static bool btOverflow = false;
-  while (BT.available() > 0) {
-    char incoming = static_cast<char>(BT.read());
-
-    if (incoming == '\r')
-      continue;
-    if (incoming == '\n') {
-      bluetoothCommandBuffer[bluetoothCommandLength] = '\0';
-      if (btOverflow) {
-        BT.println("{\"error\":\"BUFFER_OVERFLOW\"}");
-      } else {
-        String response = parse(String(bluetoothCommandBuffer));
-        BT.println(response);
-      }
-      bluetoothCommandLength = 0;
-      btOverflow = false;
-
-      continue;
-    }
-
-    if (bluetoothCommandLength < COMMAND_BUFFER_SIZE - 1) {
-      bluetoothCommandBuffer[bluetoothCommandLength++] = incoming;
-    } else
-      btOverflow = true;
-  }
-
-  delay(1);
+  vTaskDelay(pdMS_TO_TICKS(1000));
 }

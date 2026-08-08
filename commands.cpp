@@ -1,8 +1,9 @@
 #include "commands.h"
 #include "globals.h"
 #include "io.h"
-#include "modbus.h"
+#include "modbus_task.h"
 #include "motor.h"
+#include "ramp.h"
 
 #include <cstdlib>
 
@@ -21,6 +22,22 @@ static String printJSON() {
   return json;
 }
 
+static String profileJSON() {
+  MbProfile p = mbProfile();
+  JsonDocument d;
+  d["count"] = p.count;
+  d["timeouts"] = p.timeouts;
+  d["crc_errors"] = p.crcErrors;
+  d["last_us"] = p.lastUs;
+  d["min_us"] = p.minUs;
+  d["max_us"] = p.maxUs;
+  d["avg_us"] = p.avgUs;
+
+  String o;
+  serializeJson(d, o);
+  return o;
+}
+
 String parse(String input) {
   if (input.length() == 0) return makeError("INVALID_CMD", "Empty command");
   int sepIndex = input.indexOf('=');
@@ -30,18 +47,34 @@ String parse(String input) {
       if (!startMotor()) return makeError("SAFETY_LOCKED");
       return RESP_OK;
     } else if (input.equalsIgnoreCase("stop")) {
+      rampStop();
       stopMotor();
       return RESP_OK;
     } else if (input.equalsIgnoreCase("status")) {
       return printJSON();
     } else if (input.equalsIgnoreCase("estop")) {
+      rampStop();
       setEmergencyLatched(true);
       return RESP_OK;
     } else if (input.equalsIgnoreCase("clearfault")) {
       clearEmergencyLatched();
-      modbusClearFault();
+      mbCall(MbOp::ClearFault);
       stopMotor();
 
+      return RESP_OK;
+    } else if (input.equalsIgnoreCase("rampstop")) {
+      rampStop();
+      return RESP_OK;
+    } else if (input.equalsIgnoreCase("rampclear")) {
+      rampBuilderReset(0);
+      return RESP_OK;
+    } else if (input.equalsIgnoreCase("rampstart")) {
+      if (!rampStart()) return makeError("SAFETY_LOCKED");
+      return RESP_OK;
+    } else if (input.equalsIgnoreCase("profile")) {
+      return profileJSON();
+    } else if (input.equalsIgnoreCase("profilereset")) {
+      mbProfileReset();
       return RESP_OK;
     }
     return makeError("INVALID_CMD", input.c_str());
@@ -122,6 +155,41 @@ String parse(String input) {
     }
 
     return makeError("INVALID_VALUE", "mode");
+  } else if (command.equalsIgnoreCase("ramp")) {
+    const char *errField = nullptr;
+    if (!rampParseLoadStart(value.c_str(), &errField))
+      return makeError("INVALID_VALUE", errField ? errField : "ramp");
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("rampload")) {
+    const char *errField = nullptr;
+    RampProfile profile;
+    if (!rampParse(value.c_str(), profile, &errField))
+      return makeError("INVALID_VALUE", errField ? errField : "ramp");
+    rampLoad(profile);
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("rampstartval")) {
+    char *endptr = nullptr;
+    long v = strtol(value.c_str(), &endptr, 10);
+    if (endptr == value.c_str() || v < 0) return makeError("INVALID_VALUE", "ramp");
+    while (*endptr && isspace(*endptr)) ++endptr;
+    if (*endptr) return makeError("INVALID_VALUE", "ramp");
+    rampBuilderSetStart(static_cast<uint16_t>(v));
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("rampadd")) {
+    char *endptr = nullptr;
+    long target = strtol(value.c_str(), &endptr, 10);
+    if (endptr == value.c_str() || target < 0) return makeError("INVALID_VALUE", "ramp");
+    while (*endptr && isspace(*endptr)) ++endptr;
+    if (*endptr != ',') return makeError("INVALID_VALUE", "ramp");
+    const char *durStr = endptr + 1;
+    char *durEnd = nullptr;
+    long dur = strtol(durStr, &durEnd, 10);
+    if (durEnd == durStr || dur < 0) return makeError("INVALID_VALUE", "ramp");
+    while (*durEnd && isspace(*durEnd)) ++durEnd;
+    if (*durEnd) return makeError("INVALID_VALUE", "ramp");
+    if (!rampBuilderAdd(static_cast<uint16_t>(target), static_cast<uint32_t>(dur)))
+      return makeError("INVALID_VALUE", "ramp_full");
+    return RESP_OK;
   } else
     return makeError("INVALID_CMD", command.c_str());
 }

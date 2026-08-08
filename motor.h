@@ -6,6 +6,11 @@ bool startMotor();
 void stopMotor();
 void emergencyStopMotor();
 
+bool motorConfigureForRun(uint16_t accelMs);
+bool motorRun(bool running);
+uint16_t motorClampSetpoint(uint16_t value);
+bool motorSetRuntimeSetpoint(uint16_t value);
+
 bool changeControlMode(ControlMode controlMode);
 bool changeTargetRpm(uint16_t rpm);
 bool changeOpenLoopCommandRaw(uint16_t raw);
