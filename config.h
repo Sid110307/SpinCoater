@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#define BYPASS_SAFETY 1
 
 enum class MotorDirection : uint8_t {
   Clockwise = 0,
