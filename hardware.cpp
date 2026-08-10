@@ -110,6 +110,8 @@ bool isMotorRunning() {
 }
 
 void setEmergencyLatched(bool latched) {
+  if (safetyBypassEnabled()) latched = false;
+
   stateLock();
   bool changed = state.emergencyLatched != latched;
   state.emergencyLatched = latched;
@@ -120,6 +122,8 @@ void setEmergencyLatched(bool latched) {
 }
 
 bool isEmergencyLatched() {
+  if (safetyBypassEnabled()) return false;
+
   stateLock();
   bool v = state.emergencyLatched;
   stateUnlock();
@@ -144,6 +148,11 @@ bool physicalSafetyInputsInactiveFor(uint32_t stableMs) {
 }
 
 bool clearEmergencyLatched() {
+  if (safetyBypassEnabled()) {
+    setEmergencyLatched(false);
+    return true;
+  }
+
   if (!physicalSafetyInputsInactiveFor(SAFETY_CLEAR_STABLE_MS)) return false;
 
   setEmergencyLatched(false);

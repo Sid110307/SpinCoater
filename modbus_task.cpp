@@ -21,27 +21,30 @@ static Telemetry telemetryCache;
 
 static volatile bool emergencyLatched = false;
 
+static bool safetyBypassEnabled() {
+  return BYPASS_SAFETY != 0;
+}
+
 static bool refreshTelemetry() {
-  uint16_t a[2] = { 0, 0 };
-  uint16_t b[3] = { 0, 0, 0 };
-  bool okA = modbusReadBlock(0x0026, 2, a);
-  bool okB = modbusReadBlock(0x0028, 3, b);
+  uint16_t voltage = 0, current = 0, power = 0, speed = 0, fault = 0;
+  bool okVoltage = modbusReadVoltage(voltage);
+  bool okCurrent = modbusReadCurrent(current);
+  bool okPower = modbusReadPower(power);
+  bool okSpeed = modbusReadSpeed(speed);
+  bool okFault = modbusReadFault(fault);
+  bool ok = okVoltage && okCurrent && okPower && okSpeed && okFault;
 
   if (telemetryMutex) xSemaphoreTake(telemetryMutex, portMAX_DELAY);
-  if (okA) {
-    telemetryCache.voltage = a[0];
-    telemetryCache.current = a[1];
-  }
-  if (okB) {
-    telemetryCache.power = b[0];
-    telemetryCache.speed = b[1];
-    telemetryCache.fault = b[2];
-  }
-  telemetryCache.valid = okA && okB;
+  if (okVoltage) telemetryCache.voltage = voltage;
+  if (okCurrent) telemetryCache.current = current;
+  if (okPower) telemetryCache.power = power;
+  if (okSpeed) telemetryCache.speed = speed;
+  if (okFault) telemetryCache.fault = fault;
+  telemetryCache.valid = ok;
   telemetryCache.updatedMs = millis();
   if (telemetryMutex) xSemaphoreGive(telemetryMutex);
 
-  return okA && okB;
+  return ok;
 }
 
 static bool execute(const MbRequest& r) {
@@ -111,10 +114,10 @@ bool mbCallUrgent(MbOp op, uint16_t arg, TickType_t timeout) {
 }
 
 void mbSetEmergency(bool latched) {
-  emergencyLatched = latched;
+  emergencyLatched = safetyBypassEnabled() ? false : latched;
 }
 bool mbIsEmergency() {
-  return emergencyLatched;
+  return safetyBypassEnabled() ? false : emergencyLatched;
 }
 
 Telemetry mbTelemetry() {

@@ -4,3 +4,4 @@
 
 .pio/
 .DS_Store
+*.ino.cpp
