@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
-#define BYPASS_SAFETY 1
 
 enum class MotorDirection : uint8_t {
   Clockwise = 0,
@@ -18,8 +17,8 @@ extern Preferences prefs;
 
 namespace Pins {
   static constexpr uint16_t EMERGENCY = 15;
-  static constexpr uint16_t SPEED = 2;
-  static constexpr uint16_t LIMIT_SWITCH = 14;
+  static constexpr uint16_t SPEED = 14;
+  static constexpr uint16_t LIMIT_SWITCH = 27;
   static constexpr uint16_t BUZZER = 4;
   static constexpr uint16_t RS485_RX = 16;
   static constexpr uint16_t RS485_TX = 17;
@@ -40,8 +39,12 @@ static constexpr uint32_t CONFIG_VERSION = 4;  // Change if config params update
 
 static constexpr int DEBOUNCE_MS = 200;
 static constexpr uint32_t SAFETY_CLEAR_STABLE_MS = 200;
-static constexpr uint32_t TIMER_FREQUENCY = 1000000;    // 1 MHz
-static constexpr uint32_t TIMER_INTERVAL_US = 1000000;  // 1,000,000 us = 1s
+static constexpr float TIMER_FREQUENCY = 1000000.0f;  // 1,000,000 us = 1s
+
+static constexpr uint8_t SPEED_POLE_PAIRS = 4;
+static constexpr uint8_t SPEED_SAMPLE_WINDOW = 32;
+static constexpr uint32_t SPEED_GLITCH_REJECT_US = 50;
+static constexpr uint32_t SPEED_STALE_TIMEOUT_MS = 500;
 
 #ifndef BYPASS_SAFETY
 #define BYPASS_SAFETY 0

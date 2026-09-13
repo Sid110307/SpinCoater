@@ -10,7 +10,7 @@ stop
   Stop motor.
 
 status
-  Print current parameters as JSON over Serial and BT.
+  Show current parameters as JSON.
 
 estop
   Emergency stop immediately.

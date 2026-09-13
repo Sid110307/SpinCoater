@@ -37,6 +37,4 @@ bool rampStart();
 bool rampParseLoadStart(const char *spec, const char **errField);
 void rampStop();
 
-bool rampIsActive();
-bool rampHasProfile();
 RampState rampGetState();

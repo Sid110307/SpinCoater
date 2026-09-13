@@ -12,6 +12,7 @@ static uint16_t clampClosedLoopRpm(uint16_t rpm) {
 }
 
 static uint16_t clampOpenLoopCommandRaw(uint16_t raw) {
+  if (raw < OPEN_LOOP_RAW_MIN) return OPEN_LOOP_RAW_MIN;
   if (raw > OPEN_LOOP_RAW_MAX) return OPEN_LOOP_RAW_MAX;
   return raw;
 }
@@ -104,7 +105,7 @@ bool changeTargetRpm(uint16_t rpm) {
 }
 
 bool changeOpenLoopCommandRaw(uint16_t raw) {
-  if (raw > OPEN_LOOP_RAW_MAX) return false;
+  if (raw < OPEN_LOOP_RAW_MIN || raw > OPEN_LOOP_RAW_MAX) return false;
   if (config.openLoopCommandRaw == raw) return true;
   config.openLoopCommandRaw = raw;
   saveConfig();

@@ -7,4 +7,3 @@
 #include "hardware.h"
 
 String getJSONString();
-void getJSON(Stream &stream);
