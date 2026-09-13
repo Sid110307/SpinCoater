@@ -42,25 +42,21 @@ mode=<closed_loop|open_loop>
   Example: mode=closed_loop
 
 ramp=<[start|]target,durationMs;target,durationMs;...>
-  Start a ramp curve (lerp from the previous point to <target> over <durationMs>.
+  Start a ramp curve (lerp from the previous point to <target> over <durationMs>).
   "<start>|" sets the initial value (default 0).
   Example: ramp=200,1000;1500,3000;1500,5000;0,2000
            (0 to 200 in 1s, to 1500 in 3s, hold 5s, to 0 in 2s)
 
-rampload=<[start|]target,durationMs;target,durationMs;...>
-  Upload a curve without starting it.
-
-rampstart
-  Start the loaded curve.
-
-rampstop
-  Stop the ramp engine (stay at last setpoint).
-
 profile
-  Print RS485 transaction timing stats as JSON (count/min/max/avg us,
-  timeouts, crc_errors).
+  Print the pulse-derived motor acceleration capture and pending samples as JSON.
 
-profilereset
-  Reset the profiling counters.
+profile=start
+  Start a new timestamped motor acceleration capture.
+
+profile=stop
+  Stop the active capture and retain its result.
+
+profile=reset
+  Clear the capture without starting a new one.
 */
 String parse(String input);

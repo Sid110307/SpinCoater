@@ -1,10 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
-
 #include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <freertos/queue.h>
 
 enum class MbOp : uint8_t {
   CommSource,
@@ -33,18 +29,4 @@ void modbusTaskBegin();
 bool mbCall(MbOp op, uint16_t arg = 0, TickType_t timeout = pdMS_TO_TICKS(300));
 bool mbCallUrgent(MbOp op, uint16_t arg = 0, TickType_t timeout = pdMS_TO_TICKS(300));
 
-void mbSetEmergency(bool latched);
-bool mbIsEmergency();
 Telemetry mbTelemetry();
-
-struct MbProfile {
-  uint32_t count;
-  uint32_t timeouts;
-  uint32_t crcErrors;
-  uint32_t lastUs;
-  uint32_t minUs;
-  uint32_t maxUs;
-  uint32_t avgUs;
-};
-MbProfile mbProfile();
-void mbProfileReset();

@@ -8,7 +8,6 @@ void emergencyStopMotor();
 
 bool motorConfigureForRun(uint16_t accelMs);
 bool motorRun(bool running);
-uint16_t motorClampSetpoint(uint16_t value);
 bool motorSetRuntimeSetpoint(uint16_t value);
 
 bool changeControlMode(ControlMode controlMode);

@@ -2,8 +2,10 @@
 
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
+#include <freertos/task.h>
 
 #include "config.h"
+#include "hardware.h"
 #include "modbus.h"
 #include "rtos.h"
 
@@ -19,27 +21,18 @@ static QueueHandle_t qUrgent = nullptr;
 static SemaphoreHandle_t telemetryMutex = nullptr;
 static Telemetry telemetryCache;
 
-static volatile bool emergencyLatched = false;
-
-static bool safetyBypassEnabled() {
-  return BYPASS_SAFETY != 0;
-}
-
 static bool refreshTelemetry() {
-  uint16_t voltage = 0, current = 0, power = 0, speed = 0, fault = 0;
-  bool okVoltage = modbusReadVoltage(voltage);
-  bool okCurrent = modbusReadCurrent(current);
-  bool okPower = modbusReadPower(power);
-  bool okSpeed = modbusReadSpeed(speed);
-  bool okFault = modbusReadFault(fault);
-  bool ok = okVoltage && okCurrent && okPower && okSpeed && okFault;
+  uint16_t registers[11] = {};
+  bool ok = modbusReadTelemetryBlock(registers);
 
   if (telemetryMutex) xSemaphoreTake(telemetryMutex, portMAX_DELAY);
-  if (okVoltage) telemetryCache.voltage = voltage;
-  if (okCurrent) telemetryCache.current = current;
-  if (okPower) telemetryCache.power = power;
-  if (okSpeed) telemetryCache.speed = speed;
-  if (okFault) telemetryCache.fault = fault;
+  if (ok) {
+    telemetryCache.voltage = registers[0]; // 0x4038
+    telemetryCache.current = registers[1]; // 0x4039
+    telemetryCache.power = registers[8]; // 0x4040
+    telemetryCache.speed = registers[9]; // 0x4041
+    telemetryCache.fault = registers[10]; // 0x4042
+  }
   telemetryCache.valid = ok;
   telemetryCache.updatedMs = millis();
   if (telemetryMutex) xSemaphoreGive(telemetryMutex);
@@ -75,7 +68,7 @@ static void modbusTaskFn(void*) {
 
     if (xQueueReceive(qNormal, &r, pdMS_TO_TICKS(5)) == pdTRUE) {
       // ignore everything else while emergency is latched
-      if (emergencyLatched) {
+      if (isEmergencyLatched()) {
         if (r.notify) xTaskNotify(r.notify, 0u, eSetValueWithOverwrite);
         continue;
       }
@@ -88,7 +81,7 @@ static void modbusTaskFn(void*) {
 static void telemetryTaskFn(void*) {
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(TELEMETRY_PERIOD_MS));
-    if (!emergencyLatched) mbCall(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));
+    if (!isEmergencyLatched()) mbCall(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));
   }
 }
 
@@ -112,13 +105,6 @@ bool mbCallUrgent(MbOp op, uint16_t arg, TickType_t timeout) {
   return submit(qUrgent, op, arg, timeout);
 }
 
-void mbSetEmergency(bool latched) {
-  emergencyLatched = safetyBypassEnabled() ? false : latched;
-}
-bool mbIsEmergency() {
-  return safetyBypassEnabled() ? false : emergencyLatched;
-}
-
 Telemetry mbTelemetry() {
   Telemetry copy;
 
@@ -126,15 +112,6 @@ Telemetry mbTelemetry() {
   copy = telemetryCache;
   if (telemetryMutex) xSemaphoreGive(telemetryMutex);
   return copy;
-}
-
-MbProfile mbProfile() {
-  MbProfile p;
-  modbusGetStats(p.count, p.timeouts, p.crcErrors, p.lastUs, p.minUs, p.maxUs, p.avgUs);
-  return p;
-}
-void mbProfileReset() {
-  modbusResetStats();
 }
 
 void modbusTaskBegin() {

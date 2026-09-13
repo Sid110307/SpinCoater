@@ -39,16 +39,25 @@ static constexpr uint32_t CONFIG_VERSION = 4;  // Change if config params update
 
 static constexpr int DEBOUNCE_MS = 200;
 static constexpr uint32_t SAFETY_CLEAR_STABLE_MS = 200;
-static constexpr float TIMER_FREQUENCY = 1000000.0f;  // 1,000,000 us = 1s
+static constexpr float TIMER_FREQUENCY = 1000000.0f;
 
 static constexpr uint8_t SPEED_POLE_PAIRS = 4;
 static constexpr uint8_t SPEED_SAMPLE_WINDOW = 32;
 static constexpr uint32_t SPEED_GLITCH_REJECT_US = 50;
 static constexpr uint32_t SPEED_STALE_TIMEOUT_MS = 500;
+static constexpr uint8_t PROFILE_SPEED_AVERAGE_PERIODS = 4;
+static constexpr uint16_t PROFILE_SAMPLE_PERIOD_MS = 20;
+static constexpr uint8_t PROFILE_ACCEL_WINDOW_SAMPLES = 5;
+static constexpr uint16_t PROFILE_BUFFER_SAMPLES = 256;
+static constexpr uint8_t PROFILE_EXPORT_BATCH_SAMPLES = 48;
 
 #ifndef BYPASS_SAFETY
 #define BYPASS_SAFETY 0
 #endif
+
+inline constexpr bool safetyBypassEnabled() {
+  return BYPASS_SAFETY != 0;
+}
 
 static constexpr uint16_t CLOSED_LOOP_RPM_MIN = 200;
 static constexpr uint16_t CLOSED_LOOP_RPM_MAX = 4000;
