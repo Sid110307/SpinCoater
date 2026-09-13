@@ -1,10 +1,14 @@
 #include "commands.h"
-#include "globals.h"
+#include "hardware.h"
 #include "io.h"
 #include "modbus_task.h"
 #include "motor.h"
+#include "motor_profile.h"
 #include "ramp.h"
 
+#include <ArduinoJson.h>
+#include <cerrno>
+#include <cctype>
 #include <cstdlib>
 
 static constexpr char RESP_OK[] = "OK";
@@ -23,19 +27,74 @@ static String printJSON() {
 }
 
 static String profileJSON() {
-  MbProfile p = mbProfile();
+  MotorProfileSummary capture;
+  MotorProfileSample samples[PROFILE_EXPORT_BATCH_SAMPLES];
+  size_t sampleCount = motorProfileRead(capture, samples, PROFILE_EXPORT_BATCH_SAMPLES);
+  PulseSpeedSnapshot speed = getPulseSpeedSnapshot();
   JsonDocument d;
-  d["count"] = p.count;
-  d["timeouts"] = p.timeouts;
-  d["crc_errors"] = p.crcErrors;
-  d["last_us"] = p.lastUs;
-  d["min_us"] = p.minUs;
-  d["max_us"] = p.maxUs;
-  d["avg_us"] = p.avgUs;
+  d["type"] = "profile";
+
+  JsonObject result = d["capture"].to<JsonObject>();
+  result["active"] = capture.active;
+  result["session"] = capture.sessionId;
+  result["elapsed_ms"] = capture.elapsedMs;
+  result["sample_count"] = capture.totalSamples;
+  result["dropped_samples"] = capture.droppedSamples;
+  result["target_rpm"] = capture.targetRpm;
+  result["commanded_accel_ms"] = capture.commandedAccelerationMs;
+  result["start_rpm"] = capture.startRpm;
+  result["current_rpm"] = capture.currentRpm;
+  result["peak_rpm"] = capture.peakRpm;
+  result["peak_accel_rpm_s"] = capture.peakAccelerationRpmPerSec;
+  result["peak_decel_rpm_s"] = capture.peakDecelerationRpmPerSec;
+  result["avg_accel_rpm_s"] = capture.averageAccelerationRpmPerSec;
+  result["reached_10pct"] = capture.reached10Percent;
+  result["reached_90pct"] = capture.reached90Percent;
+  result["time_to_10_ms"] = capture.timeTo10PercentMs;
+  result["time_to_90_ms"] = capture.timeTo90PercentMs;
+  result["rise_10_90_ms"] = capture.riseTime10To90Ms;
+  result["sample_period_ms"] = PROFILE_SAMPLE_PERIOD_MS;
+  result["rpm_average_periods"] = PROFILE_SPEED_AVERAGE_PERIODS;
+
+  JsonObject pulse = d["speed_pulse"].to<JsonObject>();
+  pulse["rpm"] = speed.valid ? speed.rpm : 0.0f;
+  pulse["valid"] = speed.valid;
+  pulse["frequency_hz"] = speed.valid ? speed.frequencyHz : 0.0f;
+  pulse["count"] = speed.pulseCount;
+  pulse["age_ms"] = speed.ageMs;
+  pulse["last_us"] = speed.lastPeriodUs;
+  pulse["avg_us"] = speed.averagePeriodUs;
+  pulse["min_us"] = speed.minPeriodUs;
+  pulse["max_us"] = speed.maxPeriodUs;
+  pulse["jitter_us"] = speed.jitterUs;
+  pulse["pole_pairs"] = SPEED_POLE_PAIRS;
+
+  JsonArray points = d["samples"].to<JsonArray>();
+  for (size_t i = 0; i < sampleCount; ++i) {
+    JsonArray point = points.add<JsonArray>();
+    point.add(samples[i].elapsedUs);
+    point.add(samples[i].rpm);
+    point.add(samples[i].accelerationRpmPerSec);
+    point.add(samples[i].pulseValid);
+  }
 
   String o;
   serializeJson(d, o);
   return o;
+}
+
+static bool parseInt(const String &text, long minimum, long maximum, long &out) {
+  const char *start = text.c_str();
+  char* end = nullptr;
+
+  errno = 0;
+  long value = strtol(start, &end, 10);
+  if (end == start || errno == ERANGE) return false;
+  while (*end && isspace(static_cast<unsigned char>(*end))) ++end;
+  if (*end || value < minimum || value > maximum) return false;
+
+  out = value;
+  return true;
 }
 
 String parse(String input) {
@@ -62,20 +121,8 @@ String parse(String input) {
       stopMotor();
 
       return RESP_OK;
-    } else if (input.equalsIgnoreCase("rampstop")) {
-      rampStop();
-      return RESP_OK;
-    } else if (input.equalsIgnoreCase("rampclear")) {
-      rampBuilderReset(0);
-      return RESP_OK;
-    } else if (input.equalsIgnoreCase("rampstart")) {
-      if (!rampStart()) return makeError("SAFETY_LOCKED");
-      return RESP_OK;
     } else if (input.equalsIgnoreCase("profile")) {
       return profileJSON();
-    } else if (input.equalsIgnoreCase("profilereset")) {
-      mbProfileReset();
-      return RESP_OK;
     }
     return makeError("INVALID_CMD", input.c_str());
   }
@@ -86,14 +133,15 @@ String parse(String input) {
   command.trim();
   value.trim();
 
-  if (command.equalsIgnoreCase("rpm")) {
-    char *endptr = nullptr;
-    long v = strtol(value.c_str(), &endptr, 10);
-    if (endptr == value.c_str() || v < 0)
-      return makeError("INVALID_VALUE", "rpm");
-    while (*endptr && isspace(*endptr))
-      ++endptr;
-    if (*endptr)
+  if (command.equalsIgnoreCase("profile")) {
+    if (value.equalsIgnoreCase("start")) motorProfileStart();
+    else if (value.equalsIgnoreCase("stop")) motorProfileStop();
+    else if (value.equalsIgnoreCase("reset")) motorProfileReset();
+    else return makeError("INVALID_VALUE", "profile");
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("rpm")) {
+    long v;
+    if (!parseInt(value, CLOSED_LOOP_RPM_MIN, CLOSED_LOOP_RPM_MAX, v))
       return makeError("INVALID_VALUE", "rpm");
 
     uint16_t rpm = static_cast<uint16_t>(v);
@@ -102,13 +150,8 @@ String parse(String input) {
       return makeError("INVALID_VALUE", "rpm");
     return RESP_OK;
   } else if (command.equalsIgnoreCase("open_loop_raw")) {
-    char *endptr = nullptr;
-    long v = strtol(value.c_str(), &endptr, 10);
-    if (endptr == value.c_str() || v < 0)
-      return makeError("INVALID_VALUE", "open_loop_raw");
-    while (*endptr && isspace(*endptr))
-      ++endptr;
-    if (*endptr)
+    long v;
+    if (!parseInt(value, OPEN_LOOP_RAW_MIN, OPEN_LOOP_RAW_MAX, v))
       return makeError("INVALID_VALUE", "open_loop_raw");
 
     uint16_t raw = static_cast<uint16_t>(v);
@@ -117,13 +160,8 @@ String parse(String input) {
       return makeError("INVALID_VALUE", "open_loop_raw");
     return RESP_OK;
   } else if (command.equalsIgnoreCase("accel_ms")) {
-    char *endptr = nullptr;
-    long v = strtol(value.c_str(), &endptr, 10);
-    if (endptr == value.c_str() || v < 0)
-      return makeError("INVALID_VALUE", "accel_ms");
-    while (*endptr && isspace(*endptr))
-      ++endptr;
-    if (*endptr)
+    long v;
+    if (!parseInt(value, ACCEL_MS_MIN, ACCEL_MS_MAX, v))
       return makeError("INVALID_VALUE", "accel_ms");
 
     uint16_t accelMs = static_cast<uint16_t>(v);
@@ -132,11 +170,11 @@ String parse(String input) {
       return makeError("INVALID_VALUE", "accel_ms");
     return RESP_OK;
   } else if (command.equalsIgnoreCase("dir")) {
-    if (value.equalsIgnoreCase("1") || value.equalsIgnoreCase("cw") || value.equalsIgnoreCase("clockwise")) {
+    if (value == "1") {
       if (!changeDirection(MotorDirection::Clockwise))
         return makeError("INVALID_VALUE", "dir");
       return RESP_OK;
-    } else if (value.equalsIgnoreCase("0") || value.equalsIgnoreCase("ccw") || value.equalsIgnoreCase("counterclockwise")) {
+    } else if (value == "0") {
       if (!changeDirection(MotorDirection::CounterClockwise))
         return makeError("INVALID_VALUE", "dir");
       return RESP_OK;
@@ -157,38 +195,8 @@ String parse(String input) {
     return makeError("INVALID_VALUE", "mode");
   } else if (command.equalsIgnoreCase("ramp")) {
     const char *errField = nullptr;
-    if (!rampParseLoadStart(value.c_str(), &errField))
+    if (!rampStartProfile(value.c_str(), &errField))
       return makeError("INVALID_VALUE", errField ? errField : "ramp");
-    return RESP_OK;
-  } else if (command.equalsIgnoreCase("rampload")) {
-    const char *errField = nullptr;
-    RampProfile profile;
-    if (!rampParse(value.c_str(), profile, &errField))
-      return makeError("INVALID_VALUE", errField ? errField : "ramp");
-    rampLoad(profile);
-    return RESP_OK;
-  } else if (command.equalsIgnoreCase("rampstartval")) {
-    char *endptr = nullptr;
-    long v = strtol(value.c_str(), &endptr, 10);
-    if (endptr == value.c_str() || v < 0) return makeError("INVALID_VALUE", "ramp");
-    while (*endptr && isspace(*endptr)) ++endptr;
-    if (*endptr) return makeError("INVALID_VALUE", "ramp");
-    rampBuilderSetStart(static_cast<uint16_t>(v));
-    return RESP_OK;
-  } else if (command.equalsIgnoreCase("rampadd")) {
-    char *endptr = nullptr;
-    long target = strtol(value.c_str(), &endptr, 10);
-    if (endptr == value.c_str() || target < 0) return makeError("INVALID_VALUE", "ramp");
-    while (*endptr && isspace(*endptr)) ++endptr;
-    if (*endptr != ',') return makeError("INVALID_VALUE", "ramp");
-    const char *durStr = endptr + 1;
-    char *durEnd = nullptr;
-    long dur = strtol(durStr, &durEnd, 10);
-    if (durEnd == durStr || dur < 0) return makeError("INVALID_VALUE", "ramp");
-    while (*durEnd && isspace(*durEnd)) ++durEnd;
-    if (*durEnd) return makeError("INVALID_VALUE", "ramp");
-    if (!rampBuilderAdd(static_cast<uint16_t>(target), static_cast<uint32_t>(dur)))
-      return makeError("INVALID_VALUE", "ramp_full");
     return RESP_OK;
   } else
     return makeError("INVALID_CMD", command.c_str());

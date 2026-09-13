@@ -1,18 +1,16 @@
 /**********************************************************************
  *   Spin Coater Motor Controller
- *   Ver: 0.204 | Date: 10/8/26
+ *   Ver: 0.210 | Date: 13/9/26
  *   Authors: K. Bhaskar, Siddharth P Bharadwaj
  */
 
 #include <Arduino.h>
 
 #include "config.h"
-#include "globals.h"
 #include "hardware.h"
 #include "modbus.h"
 #include "rtos.h"
 
-BluetoothSerial BT;
 Preferences prefs;
 MotorConfig config;
 
@@ -29,12 +27,9 @@ void setup() {
     while (true) delay(1000);
   }
 
-  if (!BT.begin("SpinCoat")) {
+  if (!bluetoothBegin()) {
     Serial.println("BT begin failed");
     setBluetoothConnected(false);
-  } else {
-    BT.setPin("123456", 6);
-    BT.println("Ready");
   }
 
   rtosBegin();

@@ -1,5 +1,4 @@
 #include "config.h"
-#include "globals.h"
 
 static bool isValidModbusAddress(uint8_t address) {
   return address >= 1 && address <= 247;

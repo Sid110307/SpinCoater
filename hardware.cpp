@@ -14,6 +14,9 @@ struct RuntimeState {
 
 static constexpr int LEDC_FREQ = 5000;
 static constexpr int LEDC_RESOLUTION = 8;
+static constexpr int LEDC_CHANNEL_R = 0;
+static constexpr int LEDC_CHANNEL_G = 1;
+static constexpr int LEDC_CHANNEL_B = 2;
 
 static RuntimeState state;
 
@@ -25,27 +28,48 @@ static volatile uint32_t speedPeriods[SPEED_SAMPLE_WINDOW] = {};
 static volatile uint8_t speedPeriodIndex = 0;
 static volatile bool speedPeriodsFilled = false;
 
-static bool safetyBypassEnabled() {
-  return BYPASS_SAFETY != 0;
+static MotorStatus motorStatusFromSnapshot(const RuntimeSnapshot &snapshot) {
+  if (snapshot.emergencyLatched) return MotorStatus::EmergencyStop;
+  if (!snapshot.motorRunning) return MotorStatus::Idle;
+  return snapshot.direction == MotorDirection::Clockwise
+    ? MotorStatus::RunningClockwise
+    : MotorStatus::RunningCounterClockwise;
 }
 
 static bool isPhysicalSafetyInputActive(uint16_t pin) {
   return digitalRead(pin) == LOW;
 }
 
+static void writeStatusLedChannel(uint16_t pin, int channel, uint16_t duty) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWrite(pin, duty);
+#else
+  ledcWrite(channel, duty);
+#endif
+}
+
 static void writeStatusLed(uint16_t red, uint16_t green, uint16_t blue) {
   if (!state.statusLedReady) return;
-  ledcWrite(Pins::LED_R, red);
-  ledcWrite(Pins::LED_G, green);
-  ledcWrite(Pins::LED_B, blue);
+  writeStatusLedChannel(Pins::LED_R, LEDC_CHANNEL_R, red);
+  writeStatusLedChannel(Pins::LED_G, LEDC_CHANNEL_G, green);
+  writeStatusLedChannel(Pins::LED_B, LEDC_CHANNEL_B, blue);
 }
 
 static void initializeStatusLed() {
   state.statusLedReady = true;
 
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
   ledcAttach(Pins::LED_R, LEDC_FREQ, LEDC_RESOLUTION);
   ledcAttach(Pins::LED_G, LEDC_FREQ, LEDC_RESOLUTION);
   ledcAttach(Pins::LED_B, LEDC_FREQ, LEDC_RESOLUTION);
+#else
+  ledcSetup(LEDC_CHANNEL_R, LEDC_FREQ, LEDC_RESOLUTION);
+  ledcSetup(LEDC_CHANNEL_G, LEDC_FREQ, LEDC_RESOLUTION);
+  ledcSetup(LEDC_CHANNEL_B, LEDC_FREQ, LEDC_RESOLUTION);
+  ledcAttachPin(Pins::LED_R, LEDC_CHANNEL_R);
+  ledcAttachPin(Pins::LED_G, LEDC_CHANNEL_G);
+  ledcAttachPin(Pins::LED_B, LEDC_CHANNEL_B);
+#endif
 
   writeStatusLed(0, 0, 0);
 }
@@ -65,7 +89,7 @@ void setupHardware() {
   delay(200);
   writeStatusLed(0, 0, 255);
   delay(200);
-  updateStatusLed();
+  updateStatusIndicators();
 }
 
 RuntimeSnapshot getRuntimeSnapshot() {
@@ -79,7 +103,7 @@ RuntimeSnapshot getRuntimeSnapshot() {
   return s;
 }
 
-PulseSpeedSnapshot getPulseSpeedSnapshot() {
+static PulseSpeedSnapshot getPulseSpeedSnapshot(uint8_t maximumPeriods) {
   uint32_t periods[SPEED_SAMPLE_WINDOW];
   uint32_t lastEdgeUs;
   uint32_t lastPeriodUs;
@@ -98,6 +122,7 @@ PulseSpeedSnapshot getPulseSpeedSnapshot() {
 
   PulseSpeedSnapshot result{};
   result.pulseCount = pulseCount;
+  result.lastEdgeUs = lastEdgeUs;
   result.lastPeriodUs = lastPeriodUs;
   if (lastEdgeUs == 0 || lastPeriodUs == 0) return result;
 
@@ -105,7 +130,8 @@ PulseSpeedSnapshot getPulseSpeedSnapshot() {
   result.ageMs = ageUs / 1000;
   if (ageUs > SPEED_STALE_TIMEOUT_MS * 1000UL) return result;
 
-  uint8_t sampleCount = periodsFilled ? SPEED_SAMPLE_WINDOW : periodIndex;
+  uint8_t availablePeriods = periodsFilled ? SPEED_SAMPLE_WINDOW : periodIndex;
+  uint8_t sampleCount = min(availablePeriods, maximumPeriods);
   if (sampleCount == 0) return result;
 
   uint64_t sumUs = 0;
@@ -113,9 +139,11 @@ PulseSpeedSnapshot getPulseSpeedSnapshot() {
   uint32_t maxUs = 0;
 
   for (uint8_t i = 0; i < sampleCount; ++i) {
-    sumUs += periods[i];
-    if (periods[i] < minUs) minUs = periods[i];
-    if (periods[i] > maxUs) maxUs = periods[i];
+    uint8_t index = (periodIndex + SPEED_SAMPLE_WINDOW - 1 - i) % SPEED_SAMPLE_WINDOW;
+    uint32_t periodUs = periods[index];
+    sumUs += periodUs;
+    if (periodUs < minUs) minUs = periodUs;
+    if (periodUs > maxUs) maxUs = periodUs;
   }
 
   result.minPeriodUs = minUs;
@@ -129,17 +157,18 @@ PulseSpeedSnapshot getPulseSpeedSnapshot() {
   return result;
 }
 
+PulseSpeedSnapshot getPulseSpeedSnapshot() {
+  return getPulseSpeedSnapshot(SPEED_SAMPLE_WINDOW);
+}
+
+PulseSpeedSnapshot getProfilePulseSpeedSnapshot() {
+  return getPulseSpeedSnapshot(PROFILE_SPEED_AVERAGE_PERIODS);
+}
+
 void setBluetoothConnected(bool connected) {
   stateLock();
   state.bluetoothConnected = connected;
   stateUnlock();
-}
-
-bool isBluetoothConnected() {
-  stateLock();
-  bool v = state.bluetoothConnected;
-  stateUnlock();
-  return v;
 }
 
 void setMotorDirection(MotorDirection direction) {
@@ -169,7 +198,6 @@ void setEmergencyLatched(bool latched) {
   state.emergencyLatched = latched;
   stateUnlock();
 
-  mbSetEmergency(latched);
   if (latched && changed) emergencyStopMotor();
 }
 
@@ -212,13 +240,7 @@ bool clearEmergencyLatched() {
 }
 
 MotorStatus getMotorStatus() {
-  RuntimeSnapshot s = getRuntimeSnapshot();
-
-  if (s.emergencyLatched) return MotorStatus::EmergencyStop;
-  if (!s.motorRunning) return MotorStatus::Idle;
-  return s.direction == MotorDirection::Clockwise
-    ? MotorStatus::RunningClockwise
-    : MotorStatus::RunningCounterClockwise;
+  return motorStatusFromSnapshot(getRuntimeSnapshot());
 }
 
 const char* motorStatusToString(MotorStatus status) {
@@ -231,15 +253,9 @@ const char* motorStatusToString(MotorStatus status) {
   }
 }
 
-void updateStatusLed() {
+void updateStatusIndicators() {
   RuntimeSnapshot s = getRuntimeSnapshot();
-  MotorStatus status = MotorStatus::Idle;
-  if (s.emergencyLatched)
-    status = MotorStatus::EmergencyStop;
-  else if (s.motorRunning)
-    status = s.direction == MotorDirection::Clockwise
-    ? MotorStatus::RunningClockwise
-    : MotorStatus::RunningCounterClockwise;
+  MotorStatus status = motorStatusFromSnapshot(s);
 
   switch (status) {
   case MotorStatus::EmergencyStop:
@@ -257,6 +273,21 @@ void updateStatusLed() {
       writeStatusLed(255, 32, 0);
     break;
   }
+
+  uint32_t phase;
+  bool buzzerOn = false;
+  if (status == MotorStatus::EmergencyStop) {
+    phase = millis() % 1500;
+    buzzerOn = phase < 120 || (phase >= 240 && phase < 360) ||
+               (phase >= 480 && phase < 600);
+  } else {
+    Telemetry telemetry = mbTelemetry();
+    if (telemetry.fault != 0) {
+      phase = millis() % 2000;
+      buzzerOn = phase < 600;
+    }
+  }
+  digitalWrite(Pins::BUZZER, buzzerOn ? HIGH : LOW);
 }
 
 // Wake emergency task from ISR

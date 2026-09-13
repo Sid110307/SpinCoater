@@ -1,7 +1,5 @@
 #include "motor.h"
 
-#include "config.h"
-#include "globals.h"
 #include "hardware.h"
 #include "modbus_task.h"
 
@@ -21,12 +19,6 @@ static uint16_t clampAccelerationMs(uint16_t ms) {
   if (ms < ACCEL_MS_MIN) return ACCEL_MS_MIN;
   if (ms > ACCEL_MS_MAX) return ACCEL_MS_MAX;
   return ms;
-}
-
-uint16_t motorClampSetpoint(uint16_t value) {
-  return config.controlMode == ControlMode::ClosedLoop
-           ? clampClosedLoopRpm(value)
-           : clampOpenLoopCommandRaw(value);
 }
 
 bool motorSetRuntimeSetpoint(uint16_t value) {

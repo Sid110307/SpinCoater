@@ -16,14 +16,6 @@ static constexpr uint32_t MODBUS_FRAME_GAP_US = 2000;
 static constexpr uint32_t MODBUS_DE_SETUP_US = 10;
 static constexpr uint32_t MODBUS_TX_TAIL_US = 100;
 
-static uint32_t statCount = 0;
-static uint32_t statTimeouts = 0;
-static uint32_t statCrcErrors = 0;
-static uint32_t statLastUs = 0;
-static uint32_t statMinUs = UINT32_MAX;
-static uint32_t statMaxUs = 0;
-static uint64_t statSumUs = 0;
-
 static uint16_t crc16(const uint8_t* data, size_t length) {
   uint16_t crc = 0xFFFF;
   for (size_t i = 0; i < length; ++i) {
@@ -55,7 +47,6 @@ static void clearRxBuffer() {
 
 static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, size_t responseCapacity, size_t& responseLength) {
   if (!modbusReady) return false;
-  uint32_t t0 = micros();
 
   clearRxBuffer();
   digitalWrite(Pins::RS485_DE_RE, HIGH);
@@ -92,30 +83,12 @@ static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, 
   Serial.println();
 #endif
 
-  uint32_t elapsed = micros() - t0;
-  statCount++;
-  statLastUs = elapsed;
-  if (elapsed < statMinUs) statMinUs = elapsed;
-  if (elapsed > statMaxUs) statMaxUs = elapsed;
-  statSumUs += elapsed;
-
-  if (!gotByte) {
-    statTimeouts++;
-    return false;
-  }
-  if (responseLength < 5) {
-    statCrcErrors++;
-    return false;
-  }
+  if (!gotByte || responseLength < 5) return false;
 
   uint16_t receivedCrc = static_cast<uint16_t>(response[responseLength - 2]) | (static_cast<uint16_t>(response[responseLength - 1]) << 8);
   uint16_t calculatedCrc = crc16(response, responseLength - 2);
 
-  if (receivedCrc != calculatedCrc) {
-    statCrcErrors++;
-    return false;
-  }
-  return true;
+  return receivedCrc == calculatedCrc;
 }
 
 static bool writeRegisterInternal(uint16_t reg, uint16_t value) {
@@ -211,39 +184,7 @@ bool modbusClearFault() {
   return writeRegisterInternal(0x4043, 1);
 }
 
-bool modbusReadVoltage(uint16_t& value) {
-  return readRegistersInternal(0x4038, 1, &value);
-}
-bool modbusReadCurrent(uint16_t& value) {
-  return readRegistersInternal(0x4039, 1, &value);
-}
-bool modbusReadPower(uint16_t& value) {
-  return readRegistersInternal(0x4040, 1, &value);
-}
-bool modbusReadSpeed(uint16_t& value) {
-  return readRegistersInternal(0x4041, 1, &value);
-}
-bool modbusReadFault(uint16_t& value) {
-  return readRegistersInternal(0x4042, 1, &value);
-}
-
-void modbusGetStats(uint32_t& count, uint32_t& timeouts, uint32_t& crcErrors, uint32_t& lastUs,
-  uint32_t& minUs, uint32_t& maxUs, uint32_t& avgUs) {
-  count = statCount;
-  timeouts = statTimeouts;
-  crcErrors = statCrcErrors;
-  lastUs = statLastUs;
-  minUs = (statMinUs == UINT32_MAX) ? 0 : statMinUs;
-  maxUs = statMaxUs;
-  avgUs = statCount ? static_cast<uint32_t>(statSumUs / statCount) : 0;
-}
-
-void modbusResetStats() {
-  statCount = 0;
-  statTimeouts = 0;
-  statCrcErrors = 0;
-  statLastUs = 0;
-  statMinUs = UINT32_MAX;
-  statMaxUs = 0;
-  statSumUs = 0;
+bool modbusReadTelemetryBlock(uint16_t *registers) {
+  if (!registers) return false;
+  return readRegistersInternal(0x4038, 11, registers);
 }

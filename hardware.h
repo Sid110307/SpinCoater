@@ -21,6 +21,7 @@ struct PulseSpeedSnapshot {
   float rpm;
   float frequencyHz;
   uint32_t pulseCount;
+  uint32_t lastEdgeUs;
   uint32_t lastPeriodUs;
   uint32_t minPeriodUs;
   uint32_t maxPeriodUs;
@@ -33,7 +34,6 @@ struct PulseSpeedSnapshot {
 void setupHardware();
 
 void setBluetoothConnected(bool connected);
-bool isBluetoothConnected();
 
 void setMotorDirection(MotorDirection direction);
 
@@ -49,14 +49,19 @@ bool physicalSafetyInputsInactiveFor(uint32_t stableMs);
 
 RuntimeSnapshot getRuntimeSnapshot();
 PulseSpeedSnapshot getPulseSpeedSnapshot();
+PulseSpeedSnapshot getProfilePulseSpeedSnapshot();
 
 /**
+LED:
  Emergency stop: red
  Running: green
  Bluetooth connected (idle): cyan
  Idle (no BT): dim amber
- */
-void updateStatusLed();
+Buzzer:
+ Emergency: three short beeps every 1.5 s.
+ Driver fault: one long beep every 2 s.
+*/
+void updateStatusIndicators();
 MotorStatus getMotorStatus();
 const char *motorStatusToString(MotorStatus status);
 

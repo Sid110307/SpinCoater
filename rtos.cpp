@@ -1,21 +1,23 @@
 #include "rtos.h"
+
 #include <BluetoothSerial.h>
 
 #include "commands.h"
 #include "config.h"
-#include "globals.h"
 #include "hardware.h"
 #include "modbus_task.h"
+#include "motor_profile.h"
 #include "ramp.h"
 
 SemaphoreHandle_t gStateMutex = nullptr;
 TaskHandle_t gEmergencyTaskHandle = nullptr;
+static BluetoothSerial BT;
 
 static void emergencyTaskFn(void *) {
   static uint32_t lastMs = 0;
   for (;;) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    if (BYPASS_SAFETY) continue;
+    if (safetyBypassEnabled()) continue;
 
     uint32_t now = millis();
     if (now - lastMs < DEBOUNCE_MS) continue;
@@ -27,7 +29,7 @@ static void emergencyTaskFn(void *) {
 }
 
 static void commsTaskFn(void *) {
-  static constexpr size_t BUF = 256;
+  static constexpr size_t BUF = 1024;
   char line[BUF];
   size_t len = 0;
   bool overflow = false;
@@ -62,9 +64,15 @@ static void commsTaskFn(void *) {
 
 static void ledTaskFn(void *) {
   for (;;) {
-    updateStatusLed();
+    updateStatusIndicators();
     vTaskDelay(pdMS_TO_TICKS(LED_REFRESH_MS));
   }
+}
+
+bool bluetoothBegin() {
+  if (!BT.begin("SpinCoat")) return false;
+  BT.println("Ready");
+  return true;
 }
 
 void rtosBegin() {
@@ -72,6 +80,7 @@ void rtosBegin() {
 
   modbusTaskBegin();
   rampBegin();
+  motorProfileBegin();
 
   xTaskCreatePinnedToCore(emergencyTaskFn, "emergency", 3072, nullptr, PRIO_EMERGENCY, &gEmergencyTaskHandle, 1);
   xTaskCreatePinnedToCore(ledTaskFn, "led", 2560, nullptr, PRIO_LED, nullptr, 1);
