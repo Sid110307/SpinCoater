@@ -50,7 +50,6 @@ static bool refreshTelemetry() {
 static bool execute(const MbRequest& r) {
   switch (r.op) {
   case MbOp::CommSource: return modbusUseCommunicationControl();
-  case MbOp::IoSource: return modbusUseIoControl();
   case MbOp::ControlMode: return modbusSetControlMode(r.arg != 0);
   case MbOp::ClosedLoopRpm: return modbusSetClosedLoopRpm(r.arg);
   case MbOp::OpenLoopPercent: return modbusSetOpenLoopSpeedPercent(r.arg);

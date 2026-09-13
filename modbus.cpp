@@ -183,15 +183,8 @@ bool modbusBegin(uint16_t slaveAddress) {
   return true;
 }
 
-bool modbusIsReady() {
-  return modbusReady;
-}
-
 bool modbusUseCommunicationControl() {
   return writeRegisterInternal(0x4037, 1);
-}
-bool modbusUseIoControl() {
-  return writeRegisterInternal(0x4037, 0);
 }
 bool modbusSetControlMode(bool closedLoop) {
   return writeRegisterInternal(0x4005, closedLoop ? 1 : 0);
@@ -232,11 +225,6 @@ bool modbusReadSpeed(uint16_t& value) {
 }
 bool modbusReadFault(uint16_t& value) {
   return readRegistersInternal(0x4042, 1, &value);
-}
-
-bool modbusReadBlock(uint16_t startReg, uint8_t count, uint16_t* out) {
-  if (count == 0 || count > 32) return false;
-  return readRegistersInternal(startReg, count, out);
 }
 
 void modbusGetStats(uint32_t& count, uint32_t& timeouts, uint32_t& crcErrors, uint32_t& lastUs,

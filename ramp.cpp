@@ -226,17 +226,6 @@ bool rampParseLoadStart(const char *spec, const char **errField) {
 void rampStop() {
   active = false;
 }
-bool rampIsActive() {
-  return active;
-}
-
-bool rampHasProfile() {
-  lock();
-  bool v = profileLoaded && profile.count > 0;
-  unlock();
-
-  return v;
-}
 
 RampState rampGetState() {
   RampState s;

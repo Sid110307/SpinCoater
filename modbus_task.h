@@ -8,7 +8,6 @@
 
 enum class MbOp : uint8_t {
   CommSource,
-  IoSource,
   ControlMode,      // 0 open loop, 1 closed loop
   ClosedLoopRpm,    // rpm
   OpenLoopPercent,  // raw 0..1000 (10% .. 100%)
