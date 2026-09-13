@@ -1,6 +1,6 @@
 /**********************************************************************
  *   Spin Coater Motor Controller
- *   Ver: 0.202 | Date: 10/8/26
+ *   Ver: 0.203 | Date: 10/8/26
  *   Authors: K. Bhaskar, Siddharth P Bharadwaj
  */
 
@@ -41,6 +41,7 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY), handleEmergencyInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(Pins::LIMIT_SWITCH), handleEmergencyInterrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(Pins::SPEED), handleSpeedPulseInterrupt, RISING);
 
   Serial.println("Ready");
 }

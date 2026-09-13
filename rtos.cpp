@@ -15,6 +15,7 @@ static void emergencyTaskFn(void *) {
   static uint32_t lastMs = 0;
   for (;;) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    if (BYPASS_SAFETY) continue;
 
     uint32_t now = millis();
     if (now - lastMs < DEBOUNCE_MS) continue;
