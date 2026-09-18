@@ -4,6 +4,7 @@
 #include "modbus_task.h"
 #include "motor.h"
 #include "motor_profile.h"
+#include "ota.h"
 #include "ramp.h"
 
 #include <ArduinoJson.h>
@@ -124,6 +125,15 @@ String parse(String input) {
       return RESP_OK;
     } else if (input.equalsIgnoreCase("profile")) {
       return profileJSON();
+    } else if (input.equalsIgnoreCase("ota_check")) {
+      if (!otaRequestCheck()) return makeError("OTA_NOT_CONFIGURED");
+      return RESP_OK;
+    } else if (input.equalsIgnoreCase("ota_status")) {
+      return otaStatusJSON();
+    } else if (input.equalsIgnoreCase("wifi_clear")) {
+      if (otaInProgress()) return makeError("COMMAND_FAILED", "wifi_clear");
+      otaClearWifi();
+      return RESP_OK;
     }
     return makeError("INVALID_CMD", input.c_str());
   }
@@ -139,6 +149,14 @@ String parse(String input) {
     else if (value.equalsIgnoreCase("stop")) motorProfileStop();
     else if (value.equalsIgnoreCase("reset")) motorProfileReset();
     else return makeError("INVALID_VALUE", "profile");
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("wifi")) {
+    if (otaInProgress()) return makeError("COMMAND_FAILED", "wifi");
+    int separator = value.indexOf('|');
+    if (separator <= 0) return makeError("INVALID_VALUE", "wifi");
+    String ssid = value.substring(0, separator);
+    String password = value.substring(separator + 1);
+    if (!otaSetWifi(ssid, password)) return makeError("INVALID_VALUE", "wifi");
     return RESP_OK;
   } else if (command.equalsIgnoreCase("rpm")) {
     long v;

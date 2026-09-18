@@ -10,6 +10,7 @@
 
 #include "hardware.h"
 #include "motor.h"
+#include "ota.h"
 #include "rtos.h"
 
 struct RampSegment {
@@ -174,7 +175,7 @@ static void rampTaskFn(void *) {
 
 bool rampStartProfile(const char *spec, const char **errField) {
   if (errField) *errField = "ramp";
-  if (isEmergencyLatched() || physicalSafetyInputsActive()) return false;
+  if (isEmergencyLatched() || physicalSafetyInputsActive() || otaInProgress()) return false;
 
   RampProfile parsed;
   if (!parseProfile(spec, parsed)) return false;

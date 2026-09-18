@@ -20,6 +20,7 @@ String getJSONString() {
   Telemetry t = mbTelemetry();
 
   doc["version"] = config.version;
+  doc["firmware_version"] = FIRMWARE_VERSION;
   doc["modbus_address"] = config.modbusAddress;
   doc["control_mode"] = controlModeToString(config.controlMode);
   doc["direction"] = config.direction == MotorDirection::Clockwise ? "cw" : "ccw";

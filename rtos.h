@@ -9,6 +9,7 @@ static constexpr UBaseType_t PRIO_MODBUS = 5;
 static constexpr UBaseType_t PRIO_COMMS = 4;
 static constexpr UBaseType_t PRIO_RAMP = 3;
 static constexpr UBaseType_t PRIO_PROFILE = 2;
+static constexpr UBaseType_t PRIO_OTA = 1;
 static constexpr UBaseType_t PRIO_TELEMETRY = 2;
 static constexpr UBaseType_t PRIO_LED = 1;
 

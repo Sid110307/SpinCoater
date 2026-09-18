@@ -58,5 +58,17 @@ profile=stop
 
 profile=reset
   Clear the capture without starting a new one.
+
+ota_check
+  Check GitHub Releases for a newer firmware and install it.
+
+ota_status
+  Show OTA status.
+
+wifi=<ssid>|<password>
+  Save Wi-Fi credentials used for OTA checks.
+
+wifi_clear
+  Remove saved OTA Wi-Fi credentials.
 */
 String parse(String input);
