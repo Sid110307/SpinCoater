@@ -22,17 +22,20 @@ static SemaphoreHandle_t telemetryMutex = nullptr;
 static Telemetry telemetryCache;
 
 static bool refreshTelemetry() {
-  uint16_t registers[11] = {};
-  bool ok = modbusReadTelemetryBlock(registers);
+  uint16_t voltage = 0, current = 0, power = 0, speed = 0, fault = 0;
+  bool okVoltage = modbusReadVoltage(voltage);
+  bool okCurrent = modbusReadCurrent(current);
+  bool okPower = modbusReadPower(power);
+  bool okSpeed = modbusReadSpeed(speed);
+  bool okFault = modbusReadFault(fault);
+  bool ok = okVoltage && okCurrent && okPower && okSpeed && okFault;
 
   if (telemetryMutex) xSemaphoreTake(telemetryMutex, portMAX_DELAY);
-  if (ok) {
-    telemetryCache.voltage = registers[0]; // 0x4038
-    telemetryCache.current = registers[1]; // 0x4039
-    telemetryCache.power = registers[8]; // 0x4040
-    telemetryCache.speed = registers[9]; // 0x4041
-    telemetryCache.fault = registers[10]; // 0x4042
-  }
+  if (okVoltage) telemetryCache.voltage = voltage;
+  if (okCurrent) telemetryCache.current = current;
+  if (okPower) telemetryCache.power = power;
+  if (okSpeed) telemetryCache.speed = speed;
+  if (okFault) telemetryCache.fault = fault;
   telemetryCache.valid = ok;
   telemetryCache.updatedMs = millis();
   if (telemetryMutex) xSemaphoreGive(telemetryMutex);
@@ -81,7 +84,11 @@ static void modbusTaskFn(void*) {
 static void telemetryTaskFn(void*) {
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(TELEMETRY_PERIOD_MS));
-    if (!isEmergencyLatched()) mbCall(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));
+    if (!isEmergencyLatched()) {
+      mbCall(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));
+      Telemetry telemetry = mbTelemetry();
+      if (telemetry.valid && telemetry.fault != 0) setEmergencyLatched(true);
+    }
   }
 }
 

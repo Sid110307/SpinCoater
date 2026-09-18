@@ -29,6 +29,22 @@ static RampProfile profile{};
 static volatile bool active = false;
 static uint32_t startMs = 0;
 
+static bool applyRampSetpoint(uint16_t setpoint) {
+  if (setpoint == 0) {
+    if (!isMotorRunning()) return true;
+    return stopMotor();
+  }
+  if (config.controlMode == ControlMode::ClosedLoop &&
+      setpoint < CLOSED_LOOP_RPM_MIN && !isMotorRunning())
+    return true;
+  if (isMotorRunning()) return motorSetRuntimeSetpoint(setpoint);
+  if (!motorConfigureForRun(ACCEL_MS_MIN)) return false;
+  if (!motorSetRuntimeSetpoint(setpoint)) return false;
+  if (!motorRun(true)) return false;
+  applyMotorRunState(true);
+  return true;
+}
+
 static void lock() {
   if (rampMutex) xSemaphoreTake(rampMutex, portMAX_DELAY);
 }
@@ -141,10 +157,15 @@ static void rampTaskFn(void *) {
     uint16_t finalTarget = profile.segments[profile.count - 1].target;
     unlock();
 
-    motorSetRuntimeSetpoint(setpoint);
+    if (!applyRampSetpoint(setpoint)) {
+      active = false;
+      setEmergencyLatched(true);
+      continue;
+    }
     if (done) {
       active = false;
-      if (finalTarget == 0) stopMotor();
+      if (finalTarget == 0 && isMotorRunning() && !stopMotor())
+        setEmergencyLatched(true);
     }
 
     vTaskDelay(pdMS_TO_TICKS(RAMP_TICK_MS));
@@ -162,11 +183,7 @@ bool rampStartProfile(const char *spec, const char **errField) {
   profile = parsed;
   unlock();
 
-  if (!motorConfigureForRun(ACCEL_MS_MIN)) return false;
-  if (!motorSetRuntimeSetpoint(parsed.startValue)) return false;
-  if (!motorRun(true)) return false;
-
-  applyMotorRunState(true);
+  if (!applyRampSetpoint(parsed.startValue)) return false;
   startMs = millis();
   active = true;
   if (errField) *errField = nullptr;

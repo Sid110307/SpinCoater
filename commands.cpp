@@ -107,7 +107,7 @@ String parse(String input) {
       return RESP_OK;
     } else if (input.equalsIgnoreCase("stop")) {
       rampStop();
-      stopMotor();
+      if (!stopMotor()) return makeError("COMMAND_FAILED", "stop");
       return RESP_OK;
     } else if (input.equalsIgnoreCase("status")) {
       return printJSON();
@@ -117,8 +117,9 @@ String parse(String input) {
       return RESP_OK;
     } else if (input.equalsIgnoreCase("clearfault")) {
       if (!clearEmergencyLatched()) return makeError("SAFETY_LOCKED");
-      mbCall(MbOp::ClearFault);
-      stopMotor();
+      if (!mbCall(MbOp::ClearFault)) return makeError("COMMAND_FAILED", "clearfault");
+      if (!stopMotor()) return makeError("COMMAND_FAILED", "stop");
+      mbCall(MbOp::RefreshTelemetry);
 
       return RESP_OK;
     } else if (input.equalsIgnoreCase("profile")) {
