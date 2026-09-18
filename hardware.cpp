@@ -80,6 +80,12 @@ void setupHardware() {
   pinMode(Pins::SPEED, INPUT);
   pinMode(Pins::BUZZER, OUTPUT);
   digitalWrite(Pins::BUZZER, LOW);
+
+  digitalWrite(Pins::BUZZER, HIGH);
+  delay(500);
+  digitalWrite(Pins::BUZZER, LOW);
+  delay(80);
+
   if (physicalSafetyInputsActive()) setEmergencyLatched(true);
 
   initializeStatusLed();

@@ -3,7 +3,7 @@
 #include "config.h"
 
 bool startMotor();
-void stopMotor();
+bool stopMotor();
 void emergencyStopMotor();
 
 bool motorConfigureForRun(uint16_t accelMs);

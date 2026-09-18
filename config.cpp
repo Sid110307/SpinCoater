@@ -13,16 +13,24 @@ static bool isValidMotorDirection(MotorDirection direction) {
 }
 
 void loadConfig() {
+  bool useDefaults = false;
   prefs.begin("motor", true);
   if (prefs.isKey("cfg")) {
     size_t read = prefs.getBytes("cfg", &config, sizeof(config));
-    if (read != sizeof(config) || config.version != CONFIG_VERSION || !isValidModbusAddress(config.modbusAddress) || !isValidControlMode(config.controlMode) || !isValidMotorDirection(config.direction)) {
-      prefs.clear();
-      setDefaultConfig();
-    }
+    useDefaults = read != sizeof(config) || config.version != CONFIG_VERSION ||
+      !isValidModbusAddress(config.modbusAddress) ||
+      !isValidControlMode(config.controlMode) ||
+      !isValidMotorDirection(config.direction) ||
+      config.targetRpm < CLOSED_LOOP_RPM_MIN || config.targetRpm > CLOSED_LOOP_RPM_MAX ||
+      config.openLoopCommandRaw > OPEN_LOOP_RAW_MAX ||
+      config.accelerationMs < ACCEL_MS_MIN || config.accelerationMs > ACCEL_MS_MAX;
   } else
-    setDefaultConfig();
+    useDefaults = true;
   prefs.end();
+  if (useDefaults) {
+    setDefaultConfig();
+    saveConfig();
+  }
 }
 
 void saveConfig() {

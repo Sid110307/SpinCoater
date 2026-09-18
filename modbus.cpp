@@ -184,7 +184,18 @@ bool modbusClearFault() {
   return writeRegisterInternal(0x4043, 1);
 }
 
-bool modbusReadTelemetryBlock(uint16_t *registers) {
-  if (!registers) return false;
-  return readRegistersInternal(0x4038, 11, registers);
+bool modbusReadVoltage(uint16_t& value) {
+  return readRegistersInternal(0x4038, 1, &value);
+}
+bool modbusReadCurrent(uint16_t& value) {
+  return readRegistersInternal(0x4039, 1, &value);
+}
+bool modbusReadPower(uint16_t& value) {
+  return readRegistersInternal(0x4040, 1, &value);
+}
+bool modbusReadSpeed(uint16_t& value) {
+  return readRegistersInternal(0x4041, 1, &value);
+}
+bool modbusReadFault(uint16_t& value) {
+  return readRegistersInternal(0x4042, 1, &value);
 }

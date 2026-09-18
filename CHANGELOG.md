@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.211 - 2026-09-18
+
+- Fixed telemetry Modbus read errors.
+- Added buzzer self-test on boot.
+- Added zero-RPM ramp segments.
+- Made ramp setpoint failures stop and latch emergency.
+- Made driver faults latch emergency until the fault is cleared.
+- Added failure responses for unsuccessful stop and clear-fault commands.
+- Implemented validation for stored configuration.
+
 ## v0.210 - 2026-09-13
 
 - Added physical motor profiling through `profile=start`, `profile=stop`, `profile=reset`, and `profile` over BT.

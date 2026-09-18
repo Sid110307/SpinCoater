@@ -14,4 +14,8 @@ bool modbusSetDirection(bool clockwise);
 bool modbusSetBrake(bool brakeOn);
 bool modbusClearFault();
 
-bool modbusReadTelemetryBlock(uint16_t *registers);
+bool modbusReadVoltage(uint16_t &value);
+bool modbusReadCurrent(uint16_t &value);
+bool modbusReadPower(uint16_t &value);
+bool modbusReadSpeed(uint16_t &value);
+bool modbusReadFault(uint16_t &value);

@@ -45,6 +45,8 @@ bool motorRun(bool running) {
 
 bool startMotor() {
   if (isEmergencyLatched() || physicalSafetyInputsActive()) return false;
+  Telemetry telemetry = mbTelemetry();
+  if (telemetry.valid && telemetry.fault != 0) return false;
   if (!motorConfigureForRun(config.accelerationMs)) return false;
 
   uint16_t setpoint = config.controlMode == ControlMode::ClosedLoop
@@ -57,10 +59,11 @@ bool startMotor() {
   return true;
 }
 
-void stopMotor() {
-  mbCall(MbOp::Run, 0);
-  mbCall(MbOp::Brake, 0);
+bool stopMotor() {
+  if (!mbCall(MbOp::Run, 0)) return false;
+  if (!mbCall(MbOp::Brake, 0)) return false;
   applyMotorRunState(false);
+  return true;
 }
 
 void emergencyStopMotor() {
@@ -71,39 +74,42 @@ void emergencyStopMotor() {
 
 bool changeControlMode(ControlMode controlMode) {
   if (config.controlMode == controlMode) return true;
-  config.controlMode = controlMode;
-  saveConfig();
-
   if (isMotorRunning()) {
     if (!mbCall(MbOp::ControlMode, controlMode == ControlMode::ClosedLoop))
       return false;
     uint16_t setpoint = controlMode == ControlMode::ClosedLoop
                           ? config.targetRpm
                           : config.openLoopCommandRaw;
-    if (!motorSetRuntimeSetpoint(setpoint)) return false;
+    MbOp op = controlMode == ControlMode::ClosedLoop
+                ? MbOp::ClosedLoopRpm
+                : MbOp::OpenLoopPercent;
+    if (!mbCall(op, setpoint)) {
+      mbCall(MbOp::ControlMode, config.controlMode == ControlMode::ClosedLoop);
+      return false;
+    }
   }
+  config.controlMode = controlMode;
+  saveConfig();
   return true;
 }
 
 bool changeTargetRpm(uint16_t rpm) {
   if (rpm < CLOSED_LOOP_RPM_MIN || rpm > CLOSED_LOOP_RPM_MAX) return false;
   if (config.targetRpm == rpm) return true;
+  if (isMotorRunning() && config.controlMode == ControlMode::ClosedLoop)
+    if (!mbCall(MbOp::ClosedLoopRpm, rpm)) return false;
   config.targetRpm = rpm;
   saveConfig();
-
-  if (isMotorRunning() && config.controlMode == ControlMode::ClosedLoop)
-    return mbCall(MbOp::ClosedLoopRpm, clampClosedLoopRpm(rpm));
   return true;
 }
 
 bool changeOpenLoopCommandRaw(uint16_t raw) {
   if (raw < OPEN_LOOP_RAW_MIN || raw > OPEN_LOOP_RAW_MAX) return false;
   if (config.openLoopCommandRaw == raw) return true;
+  if (isMotorRunning() && config.controlMode == ControlMode::OpenLoop)
+    if (!mbCall(MbOp::OpenLoopPercent, raw)) return false;
   config.openLoopCommandRaw = raw;
   saveConfig();
-
-  if (isMotorRunning() && config.controlMode == ControlMode::OpenLoop)
-    return mbCall(MbOp::OpenLoopPercent, clampOpenLoopCommandRaw(raw));
   return true;
 }
 
@@ -111,20 +117,19 @@ bool changeAccelerationMs(uint16_t accelerationMs) {
   if (accelerationMs < ACCEL_MS_MIN || accelerationMs > ACCEL_MS_MAX)
     return false;
   if (config.accelerationMs == accelerationMs) return true;
+  if (isMotorRunning())
+    if (!mbCall(MbOp::AccelMs, accelerationMs)) return false;
   config.accelerationMs = accelerationMs;
   saveConfig();
-
-  if (isMotorRunning()) return mbCall(MbOp::AccelMs, clampAccelerationMs(accelerationMs));
   return true;
 }
 
 bool changeDirection(MotorDirection direction) {
+  if (isMotorRunning() && !stopMotor()) return false;
   if (config.direction != direction) {
     config.direction = direction;
     saveConfig();
   }
-  if (isMotorRunning())
-    if (!mbCall(MbOp::Direction, direction == MotorDirection::Clockwise)) return false;
   setMotorDirection(direction);
   return true;
 }
