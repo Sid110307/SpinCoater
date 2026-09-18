@@ -1,0 +1,57 @@
+name: Firmware release
+on:
+  push:
+    branches:
+      - master
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version from commit subject
+        id: version
+        run: |
+          SUBJECT="$(git log -1 --format=%s)"
+          if [[ "$SUBJECT" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$SUBJECT" >> "$GITHUB_OUTPUT"
+            echo "version=${SUBJECT#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.version.outputs.release == 'true'
+        with:
+          python-version: "3.12"
+      - if: steps.version.outputs.release == 'true'
+        run: pip install platformio
+      - name: Build firmware
+        if: steps.version.outputs.release == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PLATFORMIO_BUILD_FLAGS="-DCORE_DEBUG_LEVEL=0 -Os -ffunction-sections -fdata-sections -DMODBUS_DEBUG=0 -DFIRMWARE_VERSION=\\\"${VERSION}\\\"" pio run -e esp32dev
+      - name: Create update manifest
+        if: steps.version.outputs.release == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          SHA256="$(sha256sum .pio/build/esp32dev/firmware.bin | cut -d ' ' -f 1)"
+          jq -n \
+            --arg version "$VERSION" \
+            --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/firmware.bin" \
+            --arg sha256 "$SHA256" \
+            '{version: $version, url: $url, sha256: $sha256}' > manifest.json
+      - name: Publish GitHub release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          gh release create "$TAG" \
+            .pio/build/esp32dev/firmware.bin#firmware.bin \
+            manifest.json#manifest.json \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --generate-notes

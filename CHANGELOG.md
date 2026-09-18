@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.212 - 2026-09-18
+
+- Added GitHub Releases OTA firmware updates.
+- Added `ota_check`, `ota_status`, and `wifi_clear` commands.
+- Added workflow to publish firmware.
+
 ## v0.211 - 2026-09-18
 
 - Fixed telemetry Modbus read errors.

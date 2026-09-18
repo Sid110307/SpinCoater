@@ -1,6 +1,6 @@
 /**********************************************************************
  *   Spin Coater Motor Controller
- *   Ver: 0.211 | Date: 13/9/26
+ *   Ver: 0.212 | Date: 18/9/26
  *   Authors: K. Bhaskar, Siddharth P Bharadwaj
  */
 
@@ -9,6 +9,7 @@
 #include "config.h"
 #include "hardware.h"
 #include "modbus.h"
+#include "ota.h"
 #include "rtos.h"
 
 Preferences prefs;
@@ -33,6 +34,7 @@ void setup() {
   }
 
   rtosBegin();
+  otaBegin();
 
   attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY), handleEmergencyInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(Pins::LIMIT_SWITCH), handleEmergencyInterrupt, FALLING);

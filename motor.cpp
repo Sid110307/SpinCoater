@@ -2,6 +2,7 @@
 
 #include "hardware.h"
 #include "modbus_task.h"
+#include "ota.h"
 
 static uint16_t clampClosedLoopRpm(uint16_t rpm) {
   if (rpm < CLOSED_LOOP_RPM_MIN) return CLOSED_LOOP_RPM_MIN;
@@ -44,7 +45,7 @@ bool motorRun(bool running) {
 }
 
 bool startMotor() {
-  if (isEmergencyLatched() || physicalSafetyInputsActive()) return false;
+  if (isEmergencyLatched() || physicalSafetyInputsActive() || otaInProgress()) return false;
   Telemetry telemetry = mbTelemetry();
   if (telemetry.valid && telemetry.fault != 0) return false;
   if (!motorConfigureForRun(config.accelerationMs)) return false;

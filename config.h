@@ -3,6 +3,10 @@
 #include <Arduino.h>
 #include <Preferences.h>
 
+#ifndef FIRMWARE_VERSION
+#error "FIRMWARE_VERSION must be defined in platformio.ini"
+#endif
+
 enum class MotorDirection : uint8_t {
   Clockwise = 0,
   CounterClockwise = 1,
