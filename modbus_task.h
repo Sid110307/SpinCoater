@@ -5,14 +5,18 @@
 enum class MbOp : uint8_t {
   CommSource,
   ControlMode,      // 0 open loop, 1 closed loop
-  ClosedLoopRpm,    // rpm
-  OpenLoopPercent,  // raw 0..1000 (10% .. 100%)
+  ClosedLoopRpm,    // rpm, 200..4000
+  OpenLoopPercent,  // raw 100..1000 (10% .. 100%)
   AccelMs,          // 300..15000
   Run,              // 0 stop, 1 run
-  Direction,        // 1 CW, 0 CCW
+  Direction,        // 0 CW, 1 CCW
   Brake,            // 0 release, 1 brake
   ClearFault,
-  RefreshTelemetry
+  PolePairs,        // 1..10
+  CurrentLimit,     // 3..35 A
+  PwmMax,           // 10..100 %
+  RefreshTelemetry,
+  RefreshOvercurrentAlarm
 };
 
 struct Telemetry {
@@ -30,3 +34,9 @@ bool mbCall(MbOp op, uint16_t arg = 0, TickType_t timeout = pdMS_TO_TICKS(300));
 bool mbCallUrgent(MbOp op, uint16_t arg = 0, TickType_t timeout = pdMS_TO_TICKS(300));
 
 Telemetry mbTelemetry();
+
+struct OvercurrentAlarm {
+  uint16_t amps = 0;
+  bool valid = false;
+};
+OvercurrentAlarm mbOvercurrentAlarm();

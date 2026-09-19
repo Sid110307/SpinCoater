@@ -39,13 +39,24 @@ static constexpr uint16_t DEFAULT_TARGET_RPM = 1200;
 static constexpr uint16_t DEFAULT_OPEN_LOOP_COMMAND_RAW = 405;
 static constexpr uint16_t DEFAULT_ACCELERATION_MS = 300;
 
-static constexpr uint32_t CONFIG_VERSION = 4;  // Change if config params update
+static constexpr uint32_t CONFIG_VERSION = 5;  // Change if config params update
 
 static constexpr int DEBOUNCE_MS = 200;
 static constexpr uint32_t SAFETY_CLEAR_STABLE_MS = 200;
 static constexpr float TIMER_FREQUENCY = 1000000.0f;
 
-static constexpr uint8_t SPEED_POLE_PAIRS = 4;
+static constexpr uint8_t DEFAULT_POLE_PAIRS = 4;
+static constexpr uint8_t POLE_PAIRS_MIN = 1;
+static constexpr uint8_t POLE_PAIRS_MAX = 10;
+
+static constexpr uint8_t DEFAULT_CURRENT_LIMIT_AMPS = 0;
+static constexpr uint8_t CURRENT_LIMIT_MIN_A = 3;
+static constexpr uint8_t CURRENT_LIMIT_MAX_A = 35;
+
+static constexpr uint8_t DEFAULT_PWM_MAX_PERCENT = 100;
+static constexpr uint8_t PWM_MAX_MIN = 10;
+static constexpr uint8_t PWM_MAX_MAX = 100;
+
 static constexpr uint8_t SPEED_SAMPLE_WINDOW = 32;
 static constexpr uint32_t SPEED_GLITCH_REJECT_US = 50;
 static constexpr uint32_t SPEED_STALE_TIMEOUT_MS = 500;
@@ -65,7 +76,7 @@ inline constexpr bool safetyBypassEnabled() {
 
 static constexpr uint16_t CLOSED_LOOP_RPM_MIN = 200;
 static constexpr uint16_t CLOSED_LOOP_RPM_MAX = 4000;
-static constexpr uint16_t OPEN_LOOP_RAW_MIN = 0;
+static constexpr uint16_t OPEN_LOOP_RAW_MIN = 100;
 static constexpr uint16_t OPEN_LOOP_RAW_MAX = 1000;
 static constexpr uint16_t ACCEL_MS_MIN = 300;
 static constexpr uint16_t ACCEL_MS_MAX = 15000;
@@ -86,6 +97,10 @@ struct MotorConfig {
   uint16_t targetRpm;
   uint16_t openLoopCommandRaw;
   uint16_t accelerationMs;
+
+  uint8_t polePairs;
+  uint8_t currentLimitAmps;
+  uint8_t pwmMaxPercent;
 };
 
 extern MotorConfig config;

@@ -35,6 +35,10 @@ bool motorConfigureForRun(uint16_t accelMs) {
   if (!mbCall(MbOp::Direction, config.direction == MotorDirection::Clockwise))
     return false;
   if (!mbCall(MbOp::AccelMs, clampAccelerationMs(accelMs))) return false;
+  if (!mbCall(MbOp::PolePairs, config.polePairs)) return false;
+  if (!mbCall(MbOp::PwmMax, config.pwmMaxPercent)) return false;
+  if (config.currentLimitAmps != 0 && !mbCall(MbOp::CurrentLimit, config.currentLimitAmps))
+    return false;
   if (!mbCall(MbOp::Brake, 0)) return false;
   return true;
 }
@@ -132,5 +136,37 @@ bool changeDirection(MotorDirection direction) {
     saveConfig();
   }
   setMotorDirection(direction);
+  return true;
+}
+
+bool changePolePairs(uint8_t pairs) {
+  if (pairs < POLE_PAIRS_MIN || pairs > POLE_PAIRS_MAX) return false;
+  if (config.polePairs == pairs) return true;
+  if (isMotorRunning() && !stopMotor()) return false;
+
+  config.polePairs = pairs;
+  saveConfig();
+  return true;
+}
+
+bool changeCurrentLimitAmps(uint8_t amps) {
+  if (amps != 0 && (amps < CURRENT_LIMIT_MIN_A || amps > CURRENT_LIMIT_MAX_A)) return false;
+  if (config.currentLimitAmps == amps) return true;
+  if (isMotorRunning() && amps != 0)
+    if (!mbCall(MbOp::CurrentLimit, amps)) return false;
+
+  config.currentLimitAmps = amps;
+  saveConfig();
+  return true;
+}
+
+bool changePwmMaxPercent(uint8_t percent) {
+  if (percent < PWM_MAX_MIN || percent > PWM_MAX_MAX) return false;
+  if (config.pwmMaxPercent == percent) return true;
+  if (isMotorRunning())
+    if (!mbCall(MbOp::PwmMax, percent)) return false;
+
+  config.pwmMaxPercent = percent;
+  saveConfig();
   return true;
 }

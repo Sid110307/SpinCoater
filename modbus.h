@@ -13,6 +13,11 @@ bool modbusSetRun(bool running);
 bool modbusSetDirection(bool clockwise);
 bool modbusSetBrake(bool brakeOn);
 bool modbusClearFault();
+bool modbusSetPolePairs(uint8_t pairs);
+bool modbusSetCurrentLimit(uint8_t amps);
+bool modbusSetPwmMax(uint8_t percent);
+
+bool modbusReadOvercurrentAlarm(uint16_t &value);
 
 bool modbusReadVoltage(uint16_t &value);
 bool modbusReadCurrent(uint16_t &value);

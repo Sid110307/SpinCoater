@@ -20,6 +20,7 @@ static QueueHandle_t qUrgent = nullptr;
 
 static SemaphoreHandle_t telemetryMutex = nullptr;
 static Telemetry telemetryCache;
+static OvercurrentAlarm overcurrentAlarmCache;
 
 static bool refreshTelemetry() {
   uint16_t voltage = 0, current = 0, power = 0, speed = 0, fault = 0;
@@ -43,6 +44,18 @@ static bool refreshTelemetry() {
   return ok;
 }
 
+static bool refreshOvercurrentAlarm() {
+  uint16_t amps = 0;
+  bool ok = modbusReadOvercurrentAlarm(amps);
+
+  if (telemetryMutex) xSemaphoreTake(telemetryMutex, portMAX_DELAY);
+  if (ok) overcurrentAlarmCache.amps = amps;
+  overcurrentAlarmCache.valid = ok;
+  if (telemetryMutex) xSemaphoreGive(telemetryMutex);
+
+  return ok;
+}
+
 static bool execute(const MbRequest& r) {
   switch (r.op) {
   case MbOp::CommSource: return modbusUseCommunicationControl();
@@ -54,7 +67,11 @@ static bool execute(const MbRequest& r) {
   case MbOp::Direction: return modbusSetDirection(r.arg != 0);
   case MbOp::Brake: return modbusSetBrake(r.arg != 0);
   case MbOp::ClearFault: return modbusClearFault();
+  case MbOp::PolePairs: return modbusSetPolePairs(static_cast<uint8_t>(r.arg));
+  case MbOp::CurrentLimit: return modbusSetCurrentLimit(static_cast<uint8_t>(r.arg));
+  case MbOp::PwmMax: return modbusSetPwmMax(static_cast<uint8_t>(r.arg));
   case MbOp::RefreshTelemetry: return refreshTelemetry();
+  case MbOp::RefreshOvercurrentAlarm: return refreshOvercurrentAlarm();
   }
   return false;
 }
@@ -117,6 +134,15 @@ Telemetry mbTelemetry() {
 
   if (telemetryMutex) xSemaphoreTake(telemetryMutex, portMAX_DELAY);
   copy = telemetryCache;
+  if (telemetryMutex) xSemaphoreGive(telemetryMutex);
+  return copy;
+}
+
+OvercurrentAlarm mbOvercurrentAlarm() {
+  OvercurrentAlarm copy;
+
+  if (telemetryMutex) xSemaphoreTake(telemetryMutex, portMAX_DELAY);
+  copy = overcurrentAlarmCache;
   if (telemetryMutex) xSemaphoreGive(telemetryMutex);
   return copy;
 }
