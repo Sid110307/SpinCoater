@@ -183,6 +183,19 @@ bool modbusSetBrake(bool brakeOn) {
 bool modbusClearFault() {
   return writeRegisterInternal(0x4043, 1);
 }
+bool modbusSetPolePairs(uint8_t pairs) {
+  return writeRegisterInternal(0x4001, pairs);
+}
+bool modbusSetCurrentLimit(uint8_t amps) {
+  return writeRegisterInternal(0x4003, amps);
+}
+bool modbusSetPwmMax(uint8_t percent) {
+  return writeRegisterInternal(0x4004, percent);
+}
+
+bool modbusReadOvercurrentAlarm(uint16_t& value) {
+  return readRegistersInternal(0x4002, 1, &value);
+}
 
 bool modbusReadVoltage(uint16_t& value) {
   return readRegistersInternal(0x4038, 1, &value);

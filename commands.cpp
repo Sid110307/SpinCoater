@@ -68,7 +68,7 @@ static String profileJSON() {
   pulse["min_us"] = speed.minPeriodUs;
   pulse["max_us"] = speed.maxPeriodUs;
   pulse["jitter_us"] = speed.jitterUs;
-  pulse["pole_pairs"] = SPEED_POLE_PAIRS;
+  pulse["pole_pairs"] = config.polePairs;
 
   JsonArray points = d["samples"].to<JsonArray>();
   for (size_t i = 0; i < sampleCount; ++i) {
@@ -212,6 +212,27 @@ String parse(String input) {
     }
 
     return makeError("INVALID_VALUE", "mode");
+  } else if (command.equalsIgnoreCase("pole_pairs")) {
+    long v;
+    if (!parseInt(value, POLE_PAIRS_MIN, POLE_PAIRS_MAX, v))
+      return makeError("INVALID_VALUE", "pole_pairs");
+    if (!changePolePairs(static_cast<uint8_t>(v)))
+      return makeError("INVALID_VALUE", "pole_pairs");
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("current_limit")) {
+    long v;
+    if (!parseInt(value, 0, CURRENT_LIMIT_MAX_A, v))
+      return makeError("INVALID_VALUE", "current_limit");
+    if (!changeCurrentLimitAmps(static_cast<uint8_t>(v)))
+      return makeError("INVALID_VALUE", "current_limit");
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("pwm_max")) {
+    long v;
+    if (!parseInt(value, PWM_MAX_MIN, PWM_MAX_MAX, v))
+      return makeError("INVALID_VALUE", "pwm_max");
+    if (!changePwmMaxPercent(static_cast<uint8_t>(v)))
+      return makeError("INVALID_VALUE", "pwm_max");
+    return RESP_OK;
   } else if (command.equalsIgnoreCase("ramp")) {
     const char *errField = nullptr;
     if (!rampStartProfile(value.c_str(), &errField))

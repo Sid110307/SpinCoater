@@ -58,7 +58,7 @@ static bool validSetpoint(unsigned long value) {
   if (value == 0) return true;
   if (config.controlMode == ControlMode::ClosedLoop)
     return value >= CLOSED_LOOP_RPM_MIN && value <= CLOSED_LOOP_RPM_MAX;
-  return value <= OPEN_LOOP_RAW_MAX;
+  return value >= OPEN_LOOP_RAW_MIN && value <= OPEN_LOOP_RAW_MAX;
 }
 
 static bool parseUnsigned(const char *start, char **end, unsigned long &value) {

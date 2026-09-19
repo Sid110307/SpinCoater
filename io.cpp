@@ -27,6 +27,9 @@ String getJSONString() {
   doc["target_rpm"] = config.targetRpm;
   doc["open_loop_raw"] = config.openLoopCommandRaw;
   doc["accel_ms"] = config.accelerationMs;
+  doc["pole_pairs"] = config.polePairs;
+  doc["current_limit_amps"] = config.currentLimitAmps;
+  doc["pwm_max_percent"] = config.pwmMaxPercent;
   doc["status"] = motorStatusToString(getMotorStatus());
   doc["running"] = isMotorRunning();
   doc["emergency"] = isEmergencyLatched();
@@ -38,6 +41,10 @@ String getJSONString() {
   doc["motor_fault"] = t.fault;
   doc["telemetry_valid"] = t.valid;
   doc["telemetry_age_ms"] = t.updatedMs ? (millis() - t.updatedMs) : 0;
+
+  OvercurrentAlarm oc = mbOvercurrentAlarm();
+  doc["overcurrent_alarm_amps"] = oc.amps;
+  doc["overcurrent_alarm_valid"] = oc.valid;
 
   RampState r = rampGetState();
   JsonObject ramp = doc["ramp"].to<JsonObject>();

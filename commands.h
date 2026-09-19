@@ -24,14 +24,29 @@ rpm=<int>
   Example: rpm=1200
 
 open_loop_raw=<int>
-  Set the open-loop command raw value.
-  Range: 0..1000
+  Set the open-loop command raw value (10%..100% in tenths of a percent).
+  Range: 100..1000
   Example: open_loop_raw=405
 
 accel_ms=<int>
   Set acceleration time in milliseconds.
   Range: 300..15000
   Example: accel_ms=500
+
+pole_pairs=<int>
+  Set the motor pole-pair count.
+  Range: 1..10
+  Example: pole_pairs=4
+
+current_limit=<int>
+  Set the driver's current limit (A), 0 to restore default.
+  Range: 0, or 3..35
+  Example: current_limit=15
+
+pwm_max=<int>
+  Cap the maximum PWM duty %.
+  Range: 10..100
+  Example: pwm_max=100
 
 dir=<1|0>
   Set motor direction output (1: CW, 0: CCW).

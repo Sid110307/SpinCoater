@@ -157,7 +157,7 @@ static PulseSpeedSnapshot getPulseSpeedSnapshot(uint8_t maximumPeriods) {
   result.jitterUs = maxUs - minUs;
   result.averagePeriodUs = static_cast<float>(sumUs) / sampleCount;
   result.frequencyHz = TIMER_FREQUENCY / result.averagePeriodUs;
-  result.rpm = result.frequencyHz * 60.0f / (3.0f * SPEED_POLE_PAIRS);
+  result.rpm = result.frequencyHz * 60.0f / (3.0f * config.polePairs);
   result.valid = true;
 
   return result;

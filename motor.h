@@ -15,3 +15,6 @@ bool changeTargetRpm(uint16_t rpm);
 bool changeOpenLoopCommandRaw(uint16_t raw);
 bool changeAccelerationMs(uint16_t accelerationMs);
 bool changeDirection(MotorDirection direction);
+bool changePolePairs(uint8_t pairs);
+bool changeCurrentLimitAmps(uint8_t amps);
+bool changePwmMaxPercent(uint8_t percent);

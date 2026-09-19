@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.213 - 2026-09-19
+
+- Exposed driver pole-pair count, current limit, and PWM max as configurable settings.
+- Fixed RPM calculation to use configured pole-pair count.
+- Fixed `open_loop_raw` minimum bound (0 -> 100).
+- Fixed ramp validation bug.
+- Added reading of the driver's overcurrent alarm threshold.
+- Bumped config schema version.
+
 ## v0.212 - 2026-09-18
 
 - Added GitHub Releases OTA firmware updates.
