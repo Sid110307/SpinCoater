@@ -65,5 +65,5 @@ void updateStatusIndicators();
 MotorStatus getMotorStatus();
 const char *motorStatusToString(MotorStatus status);
 
-void IRAM_ATTR handleEmergencyInterrupt();
-void IRAM_ATTR handleSpeedPulseInterrupt();
+void handleEmergencyInterrupt();
+void handleSpeedPulseInterrupt();

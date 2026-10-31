@@ -1,5 +1,6 @@
 #include "modbus_task.h"
 
+#include <esp_task_wdt.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
@@ -9,10 +10,20 @@
 #include "modbus.h"
 #include "rtos.h"
 
+// Each calling task owns one Waiter (kept in its thread-local storage). A ticket makes a late reply to a
+// timed-out call harmless, and task notifications stay free for the emergency task's interrupt wake-up.
+struct Waiter {
+  SemaphoreHandle_t sem;
+  volatile uint32_t doneTicket;
+  volatile bool ok;
+  uint32_t ticket;
+};
+
 struct MbRequest {
   MbOp op;
   uint16_t arg;
-  TaskHandle_t notify;
+  Waiter *waiter;
+  uint32_t ticket;
 };
 
 static QueueHandle_t qNormal = nullptr;
@@ -76,30 +87,39 @@ static bool execute(const MbRequest& r) {
   return false;
 }
 
+static void reply(const MbRequest &r, bool ok) {
+  if (!r.waiter) return;
+  r.waiter->ok = ok;
+  r.waiter->doneTicket = r.ticket;
+  xSemaphoreGive(r.waiter->sem);
+}
+
 static void modbusTaskFn(void*) {
+  esp_task_wdt_add(nullptr);
   MbRequest r;
   for (;;) {
+    esp_task_wdt_reset();
     // emergency is first priority
     if (xQueueReceive(qUrgent, &r, 0) == pdTRUE) {
-      bool ok = execute(r);
-      if (r.notify) xTaskNotify(r.notify, ok ? 1u : 0u, eSetValueWithOverwrite);
+      reply(r, execute(r));
       continue;
     }
 
     if (xQueueReceive(qNormal, &r, pdMS_TO_TICKS(5)) == pdTRUE) {
       // ignore everything else while emergency is latched
       if (isEmergencyLatched()) {
-        if (r.notify) xTaskNotify(r.notify, 0u, eSetValueWithOverwrite);
+        reply(r, false);
         continue;
       }
-      bool ok = execute(r);
-      if (r.notify) xTaskNotify(r.notify, ok ? 1u : 0u, eSetValueWithOverwrite);
+      reply(r, execute(r));
     }
   }
 }
 
 static void telemetryTaskFn(void*) {
+  esp_task_wdt_add(nullptr);
   for (;;) {
+    esp_task_wdt_reset();
     vTaskDelay(pdMS_TO_TICKS(TELEMETRY_PERIOD_MS));
     if (!isEmergencyLatched()) {
       mbCall(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));
@@ -109,16 +129,44 @@ static void telemetryTaskFn(void*) {
   }
 }
 
+static constexpr int MAX_WAITERS = 10;  // one per task that ever calls mbCall (comms, ramp, safety, ...)
+static TaskHandle_t waiterOwner[MAX_WAITERS];
+static Waiter waiterSlot[MAX_WAITERS];
+static portMUX_TYPE waiterLock = portMUX_INITIALIZER_UNLOCKED;
+
+static Waiter *myWaiter() {
+  TaskHandle_t me = xTaskGetCurrentTaskHandle();
+  Waiter *found = nullptr;
+  portENTER_CRITICAL(&waiterLock);
+  for (int i = 0; i < MAX_WAITERS && !found; ++i)
+    if (waiterOwner[i] == me) found = &waiterSlot[i];
+  for (int i = 0; i < MAX_WAITERS && !found; ++i)
+    if (!waiterOwner[i]) {
+      waiterOwner[i] = me;
+      found = &waiterSlot[i];
+    }
+  portEXIT_CRITICAL(&waiterLock);
+  if (found && !found->sem) found->sem = xSemaphoreCreateBinary();
+  return found;
+}
+
 static bool submit(QueueHandle_t q, MbOp op, uint16_t arg, TickType_t timeout) {
   if (!q) return false;
 
-  MbRequest r{ op, arg, xTaskGetCurrentTaskHandle() };
-  xTaskNotifyStateClear(nullptr);
+  Waiter *w = myWaiter();
+  if (!w || !w->sem) return false;
+  uint32_t ticket = ++w->ticket;
+  while (xSemaphoreTake(w->sem, 0) == pdTRUE) {}  // drop a stale reply from an earlier timed-out call
+
+  MbRequest r{ op, arg, w, ticket };
   if (xQueueSend(q, &r, timeout) != pdTRUE) return false;
 
-  uint32_t value = 0;
-  if (xTaskNotifyWait(0, 0xFFFFFFFF, &value, timeout) != pdTRUE) return false;
-  return value == 1;
+  TickType_t start = xTaskGetTickCount();
+  for (;;) {
+    TickType_t used = xTaskGetTickCount() - start;
+    if (used >= timeout || xSemaphoreTake(w->sem, timeout - used) != pdTRUE) return false;
+    if (w->doneTicket == ticket) return w->ok;  // otherwise it was a stale reply: keep waiting
+  }
 }
 
 bool mbCall(MbOp op, uint16_t arg, TickType_t timeout) {

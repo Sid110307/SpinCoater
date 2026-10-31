@@ -6,6 +6,9 @@
 #include "hardware.h"
 #include "modbus_task.h"
 #include "ramp.h"
+#include "auth.h"
+#include "safety.h"
+#include <esp_system.h>
 
 static const char *controlModeToString(ControlMode controlMode) {
   switch (controlMode) {
@@ -30,6 +33,8 @@ String getJSONString() {
   doc["pole_pairs"] = config.polePairs;
   doc["current_limit_amps"] = config.currentLimitAmps;
   doc["pwm_max_percent"] = config.pwmMaxPercent;
+  doc["max_hold_s"] = config.maxHoldS;
+  doc["link_stop"] = config.linkStop != 0;
   doc["status"] = motorStatusToString(getMotorStatus());
   doc["running"] = isMotorRunning();
   doc["emergency"] = isEmergencyLatched();
@@ -45,6 +50,15 @@ String getJSONString() {
   OvercurrentAlarm oc = mbOvercurrentAlarm();
   doc["overcurrent_alarm_amps"] = oc.amps;
   doc["overcurrent_alarm_valid"] = oc.valid;
+
+  doc["authenticated"] = authSessionOk();
+  doc["pin_default"] = authPinIsDefault();
+  doc["uptime_s"] = millis() / 1000;
+  doc["reset_reason"] = static_cast<int>(esp_reset_reason());
+  doc["driver_ok"] = safetyCommsOk();
+  doc["estop_stuck"] = safetyEstopStuck();
+  doc["hold_remaining_s"] = safetyHoldRemainingS();
+  doc["last_trip"] = safetyLastTrip();
 
   RampState r = rampGetState();
   JsonObject ramp = doc["ramp"].to<JsonObject>();

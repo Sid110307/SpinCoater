@@ -1,17 +1,19 @@
 /**********************************************************************
  *   Spin Coater Motor Controller
- *   Ver: 0.213 | Date: 19/9/26
+ *   Ver: 0.300 | Date: 26/10/26
  *   Authors: K. Bhaskar, Siddharth P Bharadwaj
  */
 
 #include <Arduino.h>
 
+#include "auth.h"
 #include "config.h"
 #include "hardware.h"
 #include "modbus.h"
 #include "modbus_task.h"
 #include "ota.h"
 #include "rtos.h"
+#include "safety.h"
 
 Preferences prefs;
 MotorConfig config;
@@ -20,13 +22,15 @@ void setup() {
   Serial.begin(115200);
 
   loadConfig();
+  authBegin();
   setupHardware();
   setMotorDirection(config.direction);
 
   if (!modbusBegin(config.modbusAddress)) {
     Serial.println("Modbus init failed");
     setEmergencyLatched(true);
-    while (true) delay(1000);
+    delay(15000);
+    ESP.restart();  // try again instead of sitting dead
   }
 
   if (!bluetoothBegin()) {
@@ -35,6 +39,8 @@ void setup() {
   }
 
   rtosBegin();
+  safetyBegin();
+  mbCallUrgent(MbOp::Run, 0);  // known state after any reset, including a watchdog one
   mbCall(MbOp::RefreshOvercurrentAlarm);
   otaBegin();
 

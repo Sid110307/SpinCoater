@@ -5,3 +5,4 @@
 .pio/
 .DS_Store
 *.ino.cpp
+tools/bench_runs/

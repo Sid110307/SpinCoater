@@ -309,7 +309,7 @@ void IRAM_ATTR handleSpeedPulseInterrupt() {
   portENTER_CRITICAL_ISR(&speedPulseMux);
   if (speedLastEdgeUs == 0) {
     speedLastEdgeUs = nowUs;
-    ++speedPulseCount;
+    speedPulseCount = speedPulseCount + 1;
     portEXIT_CRITICAL_ISR(&speedPulseMux);
     return;
   }
@@ -320,7 +320,7 @@ void IRAM_ATTR handleSpeedPulseInterrupt() {
     speedLastPeriodUs = 0;
     speedPeriodIndex = 0;
     speedPeriodsFilled = false;
-    ++speedPulseCount;
+    speedPulseCount = speedPulseCount + 1;
     portEXIT_CRITICAL_ISR(&speedPulseMux);
     return;
   }
@@ -330,7 +330,7 @@ void IRAM_ATTR handleSpeedPulseInterrupt() {
     speedPeriods[speedPeriodIndex] = periodUs;
     speedPeriodIndex = (speedPeriodIndex + 1) % SPEED_SAMPLE_WINDOW;
     if (speedPeriodIndex == 0) speedPeriodsFilled = true;
-    ++speedPulseCount;
+    speedPulseCount = speedPulseCount + 1;
   }
   portEXIT_CRITICAL_ISR(&speedPulseMux);
 }

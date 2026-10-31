@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.300 - 2026-10-26
+
+Safety and robustness release. **App and bench script must send `auth=<pin>` now.**
+
+- Added a PIN (`auth=`, `setpin=`; default `1234`, shown as `pin_default` in `status`). Only `status`, `ping`, `stop`, `estop` work before auth; five wrong tries lock out for 30 s; the session ends when the phone disconnects.
+- Added a safety supervisor task: constant-speed runs stop after `max_hold_s` (default 600 s, 0 = off), stop 3 s after the phone disconnects (`link_stop`, default on), and a driver that stops answering for 1.5 s while running latches the e-stop.
+- Emergency stop now retries, and while latched keeps re-sending brake/stop until the rotor is below 40 rpm; `status` reports `estop_stuck`.
+- Ramps: a zero-duration segment can no longer jump up in speed (only down, e.g. to 0); start values above 0 are rejected from standstill (`ramp_start`); total length is capped at 1 h (`ramp_length`).
+- Modbus calls no longer use task notifications for their replies (a stale or interrupt-triggered wake-up could be read as success).
+- Task watchdog on the modbus, telemetry, ramp, comms, LED and safety tasks (5 s); the driver is told to stop on every boot; Modbus init failure restarts after 15 s instead of hanging.
+- OTA: periodic checks (24 h, only when no phone is connected) only report; `ota_check` checks, `ota_install` installs. The image is marked valid after 15 s of healthy running (rollback-ready).
+- `status` adds `authenticated`, `pin_default`, `max_hold_s`, `link_stop`, `driver_ok`, `estop_stuck`, `hold_remaining_s`, `last_trip`, `uptime_s`, `reset_reason`.
+- New commands: `auth`, `setpin`, `max_hold_s`, `link_stop`, `ping`, `reboot`, `ota_install`. Config schema bumped to 6 (saved settings reset once).
+
+## v0.214 - 2026-10-20
+
+- Capped the driver current limit at 15 A (the JKBLD300V2 hardware rating; was 35).
+- Profile samples now include bus voltage and current; buffer doubled to 512 samples (~10 s).
+- Telemetry refresh sped up from 200 ms to 100 ms.
+- Ramps whose slope exceeds `RAMP_MAX_ACCEL_RPM_S` / `RAMP_MAX_ACCEL_RAW_S` are rejected with field `ramp_accel`.
+- Added `tools/spincoater_bench.py`, a guided hardware benchmark over Bluetooth.
+
 ## v0.213 - 2026-09-19
 
 - Exposed driver pole-pair count, current limit, and PWM max as configurable settings.

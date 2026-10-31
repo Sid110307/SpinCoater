@@ -1,4 +1,6 @@
+#include "auth.h"
 #include "commands.h"
+#include "safety.h"
 #include "hardware.h"
 #include "io.h"
 #include "modbus_task.h"
@@ -77,6 +79,8 @@ static String profileJSON() {
     point.add(samples[i].rpm);
     point.add(samples[i].accelerationRpmPerSec);
     point.add(samples[i].pulseValid);
+    point.add(samples[i].busVoltageV);
+    point.add(samples[i].busCurrent10mA);
   }
 
   String o;
@@ -98,12 +102,35 @@ static bool parseInt(const String &text, long minimum, long maximum, long &out) 
   return true;
 }
 
+// Commands that can only make things safer or read public state work without the PIN.
+static bool openCommand(const String &input) {
+  return input.equalsIgnoreCase("status") || input.equalsIgnoreCase("ping") || input.equalsIgnoreCase("stop") ||
+         input.equalsIgnoreCase("estop") || input.startsWith("auth=") || input.startsWith("AUTH=");
+}
+
+static String authCommand(const String &pin) {
+  switch (authTry(pin)) {
+    case 0: return RESP_OK;
+    case 2: return String("{\"error\":\"LOCKED_OUT\",\"retry_s\":") + authLockoutRemainingS() + "}";
+    default: return makeError("AUTH_FAILED");
+  }
+}
+
 String parse(String input) {
+  input.trim();
   if (input.length() == 0) return makeError("INVALID_CMD", "Empty command");
   int sepIndex = input.indexOf('=');
 
+  if (!openCommand(input) && !authSessionOk()) return makeError("AUTH_REQUIRED");
+
   if (sepIndex == -1) {
-    if (input.equalsIgnoreCase("start")) {
+    if (input.equalsIgnoreCase("ping")) {
+      return String("{\"pong\":") + millis() + "}";
+    } else if (input.equalsIgnoreCase("reboot")) {
+      if (isMotorRunning() || otaInProgress()) return makeError("COMMAND_FAILED", "reboot");
+      xTaskCreate([](void *) { vTaskDelay(pdMS_TO_TICKS(300)); ESP.restart(); }, "reboot", 2048, nullptr, 1, nullptr);
+      return RESP_OK;
+    } else if (input.equalsIgnoreCase("start")) {
       if (!startMotor()) return makeError("SAFETY_LOCKED");
       return RESP_OK;
     } else if (input.equalsIgnoreCase("stop")) {
@@ -125,8 +152,9 @@ String parse(String input) {
       return RESP_OK;
     } else if (input.equalsIgnoreCase("profile")) {
       return profileJSON();
-    } else if (input.equalsIgnoreCase("ota_check")) {
-      if (!otaRequestCheck()) return makeError("OTA_NOT_CONFIGURED");
+    } else if (input.equalsIgnoreCase("ota_check") || input.equalsIgnoreCase("ota_install")) {
+      if (isMotorRunning() || rampGetState().active) return makeError("SAFETY_LOCKED");
+      if (!otaRequestCheck(input.equalsIgnoreCase("ota_install"))) return makeError("OTA_NOT_CONFIGURED");
       return RESP_OK;
     } else if (input.equalsIgnoreCase("ota_status")) {
       return otaStatusJSON();
@@ -144,7 +172,23 @@ String parse(String input) {
   command.trim();
   value.trim();
 
-  if (command.equalsIgnoreCase("profile")) {
+  if (command.equalsIgnoreCase("auth")) {
+    return authCommand(value);
+  } else if (command.equalsIgnoreCase("setpin")) {
+    if (!authSetPin(value)) return makeError("INVALID_VALUE", "setpin");
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("max_hold_s")) {
+    long v;
+    if (!parseInt(value, 0, MAX_HOLD_S_MAX, v)) return makeError("INVALID_VALUE", "max_hold_s");
+    config.maxHoldS = static_cast<uint16_t>(v);
+    saveConfig();
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("link_stop")) {
+    if (value != "0" && value != "1") return makeError("INVALID_VALUE", "link_stop");
+    config.linkStop = value == "1";
+    saveConfig();
+    return RESP_OK;
+  } else if (command.equalsIgnoreCase("profile")) {
     if (value.equalsIgnoreCase("start")) motorProfileStart();
     else if (value.equalsIgnoreCase("stop")) motorProfileStop();
     else if (value.equalsIgnoreCase("reset")) motorProfileReset();

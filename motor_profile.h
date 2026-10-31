@@ -7,6 +7,8 @@ struct MotorProfileSample {
   float rpm;
   float accelerationRpmPerSec;
   bool pulseValid;
+  uint16_t busVoltageV;
+  uint16_t busCurrent10mA;
 };
 
 struct MotorProfileSummary {

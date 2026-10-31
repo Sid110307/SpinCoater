@@ -4,6 +4,7 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
@@ -69,8 +70,12 @@ static bool parseUnsigned(const char *start, char **end, unsigned long &value) {
   return errno != ERANGE && *end != start;
 }
 
-static bool parseProfile(const char *spec, RampProfile &out) {
+static bool parseProfile(const char *spec, RampProfile &out, const char **why) {
   if (!spec || !*spec) return false;
+
+  const bool closed = config.controlMode == ControlMode::ClosedLoop;
+  const uint32_t maxSlope = closed ? RAMP_MAX_ACCEL_RPM_S : RAMP_MAX_ACCEL_RAW_S;
+  uint32_t previous = 0;
 
   out = {};
   const char *p = spec;
@@ -81,7 +86,12 @@ static bool parseProfile(const char *spec, RampProfile &out) {
     unsigned long startValue = 0;
     if (!parseUnsigned(p, &end, startValue) || end != bar || !validSetpoint(startValue))
       return false;
+    if (startValue > 0 && !isMotorRunning()) {  // the first jump from standstill must be a ramp segment
+      if (why) *why = "ramp_start";
+      return false;
+    }
     out.startValue = static_cast<uint16_t>(startValue);
+    previous = out.startValue;
     p = bar + 1;
   }
 
@@ -98,7 +108,21 @@ static bool parseProfile(const char *spec, RampProfile &out) {
     if (!parseUnsigned(p, &end, duration) || duration > UINT32_MAX) return false;
     p = end;
     if (*p != '\0' && *p != ';') return false;
-    if (UINT32_MAX - out.totalMs < duration) return false;
+    if (UINT32_MAX - out.totalMs < duration || out.totalMs + duration > RAMP_MAX_TOTAL_MS) {
+      if (why) *why = "ramp_length";
+      return false;
+    }
+    if (duration > 0) {
+      uint32_t delta = target > previous ? target - previous : previous - target;
+      if (static_cast<uint64_t>(delta) * 1000ULL > static_cast<uint64_t>(maxSlope) * duration) {
+        if (why) *why = "ramp_accel";
+        return false;
+      }
+    } else if (target > previous) {  // an instant step is only allowed downward (e.g. to 0 to stop)
+      if (why) *why = "ramp_accel";
+      return false;
+    }
+    previous = target;
 
     out.segments[out.count++] = {
       static_cast<uint16_t>(target),
@@ -140,7 +164,9 @@ static uint16_t setpointAt(uint32_t elapsed) {
 }
 
 static void rampTaskFn(void *) {
+  esp_task_wdt_add(nullptr);
   for (;;) {
+    esp_task_wdt_reset();
     if (!active) {
       vTaskDelay(pdMS_TO_TICKS(RAMP_TICK_MS));
       continue;
@@ -178,7 +204,11 @@ bool rampStartProfile(const char *spec, const char **errField) {
   if (isEmergencyLatched() || physicalSafetyInputsActive() || otaInProgress()) return false;
 
   RampProfile parsed;
-  if (!parseProfile(spec, parsed)) return false;
+  const char *why = nullptr;
+  if (!parseProfile(spec, parsed, &why)) {
+    if (why && errField) *errField = why;
+    return false;
+  }
 
   lock();
   profile = parsed;

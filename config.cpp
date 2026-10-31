@@ -30,7 +30,8 @@ void loadConfig() {
       config.accelerationMs < ACCEL_MS_MIN || config.accelerationMs > ACCEL_MS_MAX ||
       config.polePairs < POLE_PAIRS_MIN || config.polePairs > POLE_PAIRS_MAX ||
       !isValidCurrentLimitAmps(config.currentLimitAmps) ||
-      config.pwmMaxPercent < PWM_MAX_MIN || config.pwmMaxPercent > PWM_MAX_MAX;
+      config.pwmMaxPercent < PWM_MAX_MIN || config.pwmMaxPercent > PWM_MAX_MAX ||
+      config.maxHoldS > MAX_HOLD_S_MAX || config.linkStop > 1;
   } else
     useDefaults = true;
   prefs.end();
@@ -57,4 +58,6 @@ void setDefaultConfig() {
   config.polePairs = DEFAULT_POLE_PAIRS;
   config.currentLimitAmps = DEFAULT_CURRENT_LIMIT_AMPS;
   config.pwmMaxPercent = DEFAULT_PWM_MAX_PERCENT;
+  config.maxHoldS = DEFAULT_MAX_HOLD_S;
+  config.linkStop = DEFAULT_LINK_STOP;
 }
