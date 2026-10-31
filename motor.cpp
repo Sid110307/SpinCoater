@@ -72,9 +72,13 @@ bool stopMotor() {
 }
 
 void emergencyStopMotor() {
-  mbCallUrgent(MbOp::Brake, 1);
-  mbCallUrgent(MbOp::Run, 0);
-  applyMotorRunState(false);
+  // Brake first, then drop Run; retry a few times because the RS485 link may drop a frame.
+  for (int attempt = 0; attempt < 4; ++attempt) {
+    bool brake = mbCallUrgent(MbOp::Brake, 1, pdMS_TO_TICKS(120));
+    bool run = mbCallUrgent(MbOp::Run, 0, pdMS_TO_TICKS(120));
+    if (brake && run) break;
+  }
+  applyMotorRunState(false);  // the supervisor keeps retrying while the rotor is still turning
 }
 
 bool changeControlMode(ControlMode controlMode) {

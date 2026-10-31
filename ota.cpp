@@ -18,7 +18,7 @@
 
 static constexpr char OTA_MANIFEST_URL[] =
   "https://github.com/Sid110307/SpinCoater/releases/latest/download/manifest.json";
-static constexpr uint32_t OTA_PERIOD_MS = 6UL * 60UL * 60UL * 1000UL;
+static constexpr uint32_t OTA_PERIOD_MS = 24UL * 60UL * 60UL * 1000UL;  // check only; installs need ota_install
 static constexpr uint32_t OTA_BOOT_DELAY_MS = 60UL * 1000UL;
 static constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 20000;
 static constexpr uint32_t NTP_TIMEOUT_MS = 15000;
@@ -41,6 +41,8 @@ static TaskHandle_t otaTaskHandle = nullptr;
 static OtaState otaState;
 static String wifiSsid;
 static String wifiPassword;
+static bool installRequested = false;
+static volatile bool installing = false;
 
 static void lockOta() {
   if (otaMutex) xSemaphoreTake(otaMutex, portMAX_DELAY);
@@ -249,7 +251,7 @@ static bool installUpdate(const String &url, const String &expectedSha256) {
   return true;
 }
 
-static void checkForUpdate() {
+static void checkForUpdate(bool install) {
   PulseSpeedSnapshot speed = getPulseSpeedSnapshot();
   if (isMotorRunning() || rampGetState().active || (speed.valid && speed.rpm > 20.0f)) {
     setState("deferred", "Motor must be stopped");
@@ -279,6 +281,10 @@ static void checkForUpdate() {
     return;
   }
   setState("update_available");
+  if (!install) {  // periodic and ota_check runs only report; the user decides
+    disconnectWifi();
+    return;
+  }
   if (!installUpdate(url, sha256)) {
     disconnectWifi();
     return;
@@ -288,13 +294,28 @@ static void checkForUpdate() {
 }
 
 static void otaTaskFn(void *) {
-  ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(OTA_BOOT_DELAY_MS));
+  uint32_t wait = OTA_BOOT_DELAY_MS;
   for (;;) {
-    checkForUpdate();
+    bool manual = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(wait)) > 0;
+    bool install = false;
+    lockOta();
+    bool configured = otaState.wifiConfigured;
+    if (manual) {
+      install = installRequested;
+      installRequested = false;
+    }
+    unlockOta();
+    if (!manual && (!configured || getRuntimeSnapshot().bluetoothConnected)) {  // never disturb a live session
+      wait = 60000;
+      continue;
+    }
+    installing = install;
+    checkForUpdate(install);
+    installing = false;
     lockOta();
     bool deferred = otaState.state == "deferred";
     unlockOta();
-    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(deferred ? 60000 : OTA_PERIOD_MS));
+    wait = deferred ? 60000 : OTA_PERIOD_MS;
   }
 }
 
@@ -343,22 +364,24 @@ void otaClearWifi() {
   disconnectWifi();
 }
 
-bool otaRequestCheck() {
+bool otaRequestCheck(bool install) {
   if (!otaTaskHandle) return false;
   lockOta();
   bool configured = otaState.wifiConfigured;
   unlockOta();
 
   if (!configured) return false;
+  lockOta();
+  installRequested = install;
+  unlockOta();
   xTaskNotifyGive(otaTaskHandle);
   return true;
 }
 
 bool otaInProgress() {
   lockOta();
-  bool busy = otaState.state == "connecting" || otaState.state == "checking" ||
-    otaState.state == "update_available" || otaState.state == "downloading" ||
-    otaState.state == "verifying" || otaState.state == "installed";
+  bool busy = installing || otaState.state == "connecting" || otaState.state == "checking" ||
+    otaState.state == "downloading" || otaState.state == "verifying" || otaState.state == "installed";
   unlockOta();
 
   return busy;

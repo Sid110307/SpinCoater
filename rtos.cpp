@@ -1,7 +1,9 @@
 #include "rtos.h"
 
 #include <BluetoothSerial.h>
+#include <esp_task_wdt.h>
 
+#include "auth.h"
 #include "commands.h"
 #include "config.h"
 #include "hardware.h"
@@ -33,9 +35,19 @@ static void commsTaskFn(void *) {
   char line[BUF];
   size_t len = 0;
   bool overflow = false;
+  bool wasConnected = false;
+  esp_task_wdt_add(nullptr);
 
   for (;;) {
-    setBluetoothConnected(BT.hasClient());
+    esp_task_wdt_reset();
+    bool connected = BT.hasClient();
+    setBluetoothConnected(connected);
+    if (wasConnected && !connected) {  // a new client must authenticate again
+      authReset();
+      len = 0;
+      overflow = false;
+    }
+    wasConnected = connected;
 
     while (BT.available() > 0) {
       char c = static_cast<char>(BT.read());
@@ -63,7 +75,9 @@ static void commsTaskFn(void *) {
 }
 
 static void ledTaskFn(void *) {
+  esp_task_wdt_add(nullptr);
   for (;;) {
+    esp_task_wdt_reset();
     updateStatusIndicators();
     vTaskDelay(pdMS_TO_TICKS(LED_REFRESH_MS));
   }

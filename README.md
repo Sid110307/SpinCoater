@@ -43,3 +43,11 @@ The configured serial monitor speed is 115200 baud. Review `platformio.ini` befo
 ## Safety
 
 A spin coater is rotating machinery. Validate motor direction, speed limits, lid/interlock behavior, emergency shutdown, and mechanical balance on the intended hardware before operation.
+
+## Hardware benchmark
+
+`tools/spincoater_bench.py` is a guided benchmark that connects over Bluetooth (`SpinCoat`), walks a safety checklist, then records open/closed-loop sweeps, step response, deceleration/regeneration, e-stop, repeatability and thermal data to `tools/bench_runs/`. Standard library only; `--simulate --yes` runs it against a built-in motor model.
+
+```sh
+python3 tools/spincoater_bench.py --label glass182
+```

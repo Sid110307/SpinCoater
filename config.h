@@ -39,7 +39,7 @@ static constexpr uint16_t DEFAULT_TARGET_RPM = 1200;
 static constexpr uint16_t DEFAULT_OPEN_LOOP_COMMAND_RAW = 405;
 static constexpr uint16_t DEFAULT_ACCELERATION_MS = 300;
 
-static constexpr uint32_t CONFIG_VERSION = 5;  // Change if config params update
+static constexpr uint32_t CONFIG_VERSION = 6;  // Change if config params update
 
 static constexpr int DEBOUNCE_MS = 200;
 static constexpr uint32_t SAFETY_CLEAR_STABLE_MS = 200;
@@ -51,7 +51,7 @@ static constexpr uint8_t POLE_PAIRS_MAX = 10;
 
 static constexpr uint8_t DEFAULT_CURRENT_LIMIT_AMPS = 0;
 static constexpr uint8_t CURRENT_LIMIT_MIN_A = 3;
-static constexpr uint8_t CURRENT_LIMIT_MAX_A = 35;
+static constexpr uint8_t CURRENT_LIMIT_MAX_A = 15;  // JKBLD300V2 hardware rating
 
 static constexpr uint8_t DEFAULT_PWM_MAX_PERCENT = 100;
 static constexpr uint8_t PWM_MAX_MIN = 10;
@@ -63,7 +63,7 @@ static constexpr uint32_t SPEED_STALE_TIMEOUT_MS = 500;
 static constexpr uint8_t PROFILE_SPEED_AVERAGE_PERIODS = 4;
 static constexpr uint16_t PROFILE_SAMPLE_PERIOD_MS = 20;
 static constexpr uint8_t PROFILE_ACCEL_WINDOW_SAMPLES = 5;
-static constexpr uint16_t PROFILE_BUFFER_SAMPLES = 256;
+static constexpr uint16_t PROFILE_BUFFER_SAMPLES = 512;
 static constexpr uint8_t PROFILE_EXPORT_BATCH_SAMPLES = 48;
 
 #ifndef BYPASS_SAFETY
@@ -83,8 +83,22 @@ static constexpr uint16_t ACCEL_MS_MAX = 15000;
 
 static constexpr uint8_t RAMP_MAX_SEGMENTS = 32;
 static constexpr uint16_t RAMP_TICK_MS = 20;
+static constexpr uint32_t RAMP_MAX_TOTAL_MS = 3600000UL;  // longest accepted ramp (1 h)
+// Fastest ramp slope accepted, in setpoint units per second. Estimated from
+// rotor+chuck inertia; retune from tools/spincoater_bench.py results.
+static constexpr uint16_t RAMP_MAX_ACCEL_RPM_S = 2000;  // closed loop (rpm/s)
+static constexpr uint16_t RAMP_MAX_ACCEL_RAW_S = 520;   // open loop (raw/s, ~3.85 rpm per raw)
 
-static constexpr uint16_t TELEMETRY_PERIOD_MS = 200;
+static constexpr uint16_t TELEMETRY_PERIOD_MS = 100;
+
+// Safety supervisor (safety.cpp)
+static constexpr uint16_t DEFAULT_MAX_HOLD_S = 600;   // constant-speed run is stopped after this (0 = off)
+static constexpr uint16_t MAX_HOLD_S_MAX = 3600;
+static constexpr uint8_t DEFAULT_LINK_STOP = 1;       // stop a constant-speed run if the phone disconnects
+static constexpr uint32_t LINK_LOSS_STOP_MS = 3000;
+static constexpr uint32_t COMMS_LOSS_LIMIT_MS = 1500; // driver silent this long while running -> latch e-stop
+static constexpr uint32_t TASK_WDT_MS = 5000;
+static constexpr float SPINNING_RPM = 40.0f;          // above this the rotor is considered still turning
 static constexpr uint16_t LED_REFRESH_MS = 50;
 
 struct MotorConfig {
@@ -101,6 +115,9 @@ struct MotorConfig {
   uint8_t polePairs;
   uint8_t currentLimitAmps;
   uint8_t pwmMaxPercent;
+
+  uint16_t maxHoldS;
+  uint8_t linkStop;
 };
 
 extern MotorConfig config;

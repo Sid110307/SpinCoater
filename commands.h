@@ -3,6 +3,27 @@
 #include <Arduino.h>
 
 /**
+auth=<pin>
+  Unlock the connection (4-8 digits, default 1234 until `setpin`). Needed before any
+  command except status, ping, stop, estop. Five wrong tries lock out for 30 s.
+
+setpin=<4..8 digits>
+  Change the PIN.
+
+ping
+  Reply with {"pong":<uptime ms>}.
+
+max_hold_s=<0..3600>
+  Stop a constant-speed run (start, or after a ramp that ends above 0) after this many
+  seconds. 0 turns the limit off. Default 600.
+
+link_stop=<0|1>
+  1 = stop a constant-speed run if the phone disconnects for 3 s (default). A ramp in
+  progress always runs to its end.
+
+reboot
+  Restart the controller (motor must be stopped).
+
 start
   Start motor.
 
@@ -40,7 +61,7 @@ pole_pairs=<int>
 
 current_limit=<int>
   Set the driver's current limit (A), 0 to restore default.
-  Range: 0, or 3..35
+  Range: 0, or 3..15
   Example: current_limit=15
 
 pwm_max=<int>
@@ -75,7 +96,10 @@ profile=reset
   Clear the capture without starting a new one.
 
 ota_check
-  Check GitHub Releases for a newer firmware and install it.
+  Check GitHub Releases for a newer firmware (does not install).
+
+ota_install
+  Check and, if newer, download, verify (SHA-256) and install the update. The motor must be stopped.
 
 ota_status
   Show OTA status.

@@ -4,6 +4,7 @@
 #include <freertos/task.h>
 
 #include "hardware.h"
+#include "modbus_task.h"
 #include "rtos.h"
 
 struct DerivativePoint {
@@ -76,7 +77,9 @@ static void bufferSampleLocked(const MotorProfileSample &sample) {
 
 static void addSampleLocked(uint32_t elapsedUs, float rpm, bool pulseValid) {
   float acceleration = accelerationForLocked(elapsedUs, rpm);
-  MotorProfileSample sample{ elapsedUs, rpm, acceleration, pulseValid };
+  Telemetry telemetry = mbTelemetry();
+  MotorProfileSample sample{ elapsedUs, rpm, acceleration, pulseValid,
+                             telemetry.voltage, telemetry.current };
   bufferSampleLocked(sample);
 
   uint32_t elapsedMs = elapsedUs / 1000;
