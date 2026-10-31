@@ -184,7 +184,9 @@ static void rampTaskFn(void *) {
     uint16_t finalTarget = profile.segments[profile.count - 1].target;
     unlock();
 
-    if (!applyRampSetpoint(setpoint)) {
+    bool applied = false;
+    for (int attempt = 0; attempt < 3 && !applied; ++attempt) applied = applyRampSetpoint(setpoint);  // one dropped RS485 frame must not latch an e-stop
+    if (!applied) {
       active = false;
       setEmergencyLatched(true);
       continue;
@@ -210,8 +212,10 @@ bool rampStartProfile(const char *spec, const char **errField) {
     return false;
   }
 
+  active = false;  // a running ramp must not see the new profile with the old start time
   lock();
   profile = parsed;
+  startMs = millis();
   unlock();
 
   if (!applyRampSetpoint(parsed.startValue)) return false;

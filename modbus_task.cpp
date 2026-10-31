@@ -49,6 +49,7 @@ static bool refreshTelemetry() {
   if (okSpeed) telemetryCache.speed = speed;
   if (okFault) telemetryCache.fault = fault;
   telemetryCache.valid = ok;
+  telemetryCache.anyOk = okVoltage || okCurrent || okSpeed || okFault;
   telemetryCache.updatedMs = millis();
   if (telemetryMutex) xSemaphoreGive(telemetryMutex);
 
@@ -125,6 +126,8 @@ static void telemetryTaskFn(void*) {
       mbCall(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));
       Telemetry telemetry = mbTelemetry();
       if (telemetry.valid && telemetry.fault != 0) setEmergencyLatched(true);
+    } else {
+      mbCallUrgent(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));  // keep the speed reading alive while braking
     }
   }
 }

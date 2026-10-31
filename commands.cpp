@@ -145,8 +145,10 @@ String parse(String input) {
       return RESP_OK;
     } else if (input.equalsIgnoreCase("clearfault")) {
       if (!clearEmergencyLatched()) return makeError("SAFETY_LOCKED");
-      if (!mbCall(MbOp::ClearFault)) return makeError("COMMAND_FAILED", "clearfault");
-      if (!stopMotor()) return makeError("COMMAND_FAILED", "stop");
+      if (!mbCall(MbOp::ClearFault) || !stopMotor()) {
+        setEmergencyLatched(true);  // the driver did not confirm: stay latched
+        return makeError("COMMAND_FAILED", "clearfault");
+      }
       mbCall(MbOp::RefreshTelemetry);
 
       return RESP_OK;

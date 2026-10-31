@@ -58,7 +58,7 @@ static void superviseLink(uint32_t now, bool running, bool rampActive) {
 static void superviseDriver(uint32_t now, bool running) {
   static uint32_t badSince = 0;
   Telemetry t = mbTelemetry();
-  bool fresh = t.valid && (now - t.updatedMs) < COMMS_LOSS_LIMIT_MS;
+  bool fresh = t.anyOk && (now - t.updatedMs) < COMMS_LOSS_LIMIT_MS;
   commsOk = fresh || !t.updatedMs;  // no telemetry yet counts as fine until the first cycle
   if (fresh || !running) {
     badSince = 0;

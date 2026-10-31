@@ -25,7 +25,8 @@ struct Telemetry {
   uint16_t power = 0;    // 0.1 W units
   uint16_t speed = 0;    // rpm
   uint16_t fault = 0;    // fault code
-  bool valid = false;
+  bool valid = false;  // every register read answered
+  bool anyOk = false;  // at least one register read answered (the driver is alive)
   uint32_t updatedMs = 0;
 };
 
