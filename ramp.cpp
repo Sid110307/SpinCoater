@@ -13,6 +13,7 @@
 #include "motor.h"
 #include "ota.h"
 #include "rtos.h"
+#include "safety.h"
 
 struct RampSegment {
   uint16_t target;
@@ -188,13 +189,16 @@ static void rampTaskFn(void *) {
     for (int attempt = 0; attempt < 3 && !applied; ++attempt) applied = applyRampSetpoint(setpoint);  // one dropped RS485 frame must not latch an e-stop
     if (!applied) {
       active = false;
+      safetyRecordTrip("ramp_failed");
       setEmergencyLatched(true);
       continue;
     }
     if (done) {
       active = false;
-      if (finalTarget == 0 && isMotorRunning() && !stopMotor())
+      if (finalTarget == 0 && isMotorRunning() && !stopMotor()) {
+        safetyRecordTrip("ramp_failed");
         setEmergencyLatched(true);
+      }
     }
 
     vTaskDelay(pdMS_TO_TICKS(RAMP_TICK_MS));
@@ -219,6 +223,7 @@ bool rampStartProfile(const char *spec, const char **errField) {
   unlock();
 
   if (!applyRampSetpoint(parsed.startValue)) return false;
+  safetyClearTrip();
   startMs = millis();
   active = true;
   if (errField) *errField = nullptr;

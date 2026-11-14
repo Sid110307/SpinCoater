@@ -3,6 +3,7 @@
 #include "hardware.h"
 #include "modbus_task.h"
 #include "ota.h"
+#include "safety.h"
 
 static uint16_t clampClosedLoopRpm(uint16_t rpm) {
   if (rpm < CLOSED_LOOP_RPM_MIN) return CLOSED_LOOP_RPM_MIN;
@@ -61,6 +62,7 @@ bool startMotor() {
   if (!motorRun(true)) return false;
 
   applyMotorRunState(true);
+  safetyClearTrip();
   return true;
 }
 

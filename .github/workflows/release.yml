@@ -1,5 +1,11 @@
 name: Firmware release
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to publish (for example v0.301)"
+        required: true
+        type: string
   push:
     branches:
       - master
@@ -10,16 +16,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Test release version selection
+        run: python3 -m unittest discover -s tools/tests
       - name: Read version from commit subject
         id: version
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           SUBJECT="$(git log -1 --format=%s)"
-          if [[ "$SUBJECT" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "tag=$SUBJECT" >> "$GITHUB_OUTPUT"
-            echo "version=${SUBJECT#v}" >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ ! "$REQUESTED_VERSION" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "Invalid version: expected vMAJOR.MINOR or vMAJOR.MINOR.PATCH" >&2
+              exit 1
+            fi
+            TAG="$REQUESTED_VERSION"
+          elif [[ "$SUBJECT" =~ ^(SpinCoater[[:space:]]+)?(v[0-9]+\.[0-9]+(\.[0-9]+)?)(:[[:space:]].*)?$ ]]; then
+            TAG="${BASH_REMATCH[2]}"
           else
             echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ -n "$TAG" ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/setup-python@v5
         if: steps.version.outputs.release == 'true'

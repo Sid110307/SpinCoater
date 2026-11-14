@@ -105,7 +105,7 @@ static bool parseInt(const String &text, long minimum, long maximum, long &out) 
 // Commands that can only make things safer or read public state work without the PIN.
 static bool openCommand(const String &input) {
   return input.equalsIgnoreCase("status") || input.equalsIgnoreCase("ping") || input.equalsIgnoreCase("stop") ||
-         input.equalsIgnoreCase("estop") || input.startsWith("auth=") || input.startsWith("AUTH=");
+         input.equalsIgnoreCase("estop") || input.equalsIgnoreCase("auth");
 }
 
 static String authCommand(const String &pin) {
@@ -117,9 +117,16 @@ static String authCommand(const String &pin) {
 }
 
 String parse(String input) {
+  // Split before trimming: whitespace in a Wi-Fi password is significant.
+  int sepIndex = input.indexOf('=');
+  String value;
+  if (sepIndex >= 0) {
+    value = input.substring(sepIndex + 1);
+    input = input.substring(0, sepIndex);
+  }
   input.trim();
   if (input.length() == 0) return makeError("INVALID_CMD", "Empty command");
-  int sepIndex = input.indexOf('=');
+  if (!input.equalsIgnoreCase("wifi")) value.trim();
 
   if (!openCommand(input) && !authSessionOk()) return makeError("AUTH_REQUIRED");
 
@@ -141,6 +148,7 @@ String parse(String input) {
       return printJSON();
     } else if (input.equalsIgnoreCase("estop")) {
       rampStop();
+      safetyRecordTrip("user_estop");
       setEmergencyLatched(true);
       return RESP_OK;
     } else if (input.equalsIgnoreCase("clearfault")) {
@@ -150,6 +158,7 @@ String parse(String input) {
         return makeError("COMMAND_FAILED", "clearfault");
       }
       mbCall(MbOp::RefreshTelemetry);
+      safetyClearTrip();
 
       return RESP_OK;
     } else if (input.equalsIgnoreCase("profile")) {
@@ -168,11 +177,7 @@ String parse(String input) {
     return makeError("INVALID_CMD", input.c_str());
   }
 
-  String command = input.substring(0, sepIndex);
-  String value = input.substring(sepIndex + 1);
-
-  command.trim();
-  value.trim();
+  String command = input;
 
   if (command.equalsIgnoreCase("auth")) {
     return authCommand(value);

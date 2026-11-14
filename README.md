@@ -31,6 +31,21 @@ pio device monitor
 
 The configured serial monitor speed is 115200 baud. Review `platformio.ini` before building; it defines the platform package, partition table, upload speed, dependencies, and firmware version.
 
+## Releases
+
+Push a commit to `master` with a subject such as `v0.301` or
+`SpinCoater v0.301: release description`. The release workflow builds that version
+and publishes `firmware.bin` and its SHA-256 manifest for Wi-Fi updates.
+Alternatively, run **Firmware release** from GitHub Actions with a version tag
+such as `v0.301`. The workflow must be on GitHub before it can be dispatched.
+Use a new version tag for each release; publishing an existing tag fails.
+
+Validate release version selection locally with:
+
+```sh
+python3 -m unittest discover -s tools/tests
+```
+
 ## Structure
 
 - `SpinCoater.ino` — firmware entry point

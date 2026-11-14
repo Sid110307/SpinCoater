@@ -10,6 +10,7 @@
 #include "modbus_task.h"
 #include "motor_profile.h"
 #include "ramp.h"
+#include "safety.h"
 
 SemaphoreHandle_t gStateMutex = nullptr;
 TaskHandle_t gEmergencyTaskHandle = nullptr;
@@ -26,6 +27,7 @@ static void emergencyTaskFn(void *) {
     lastMs = now;
 
     rampStop();
+    safetyRecordTrip("safety_input");
     setEmergencyLatched(true);
   }
 }

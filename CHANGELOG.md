@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.301 - 2026-11-14
+
+- Clear the previous safety-stop reason after a successful motor start, ramp start, or `clearfault`.
+- Record distinct stop reasons for ramp failures, app emergency stops, and physical safety inputs.
+- Preserve leading and trailing spaces in Wi-Fi credentials.
+- Accept release subjects such as `SpinCoater v0.301: description` as well as exact version subjects; add a manual release trigger with version validation.
+- Enable link-time optimization to reduce firmware flash usage while retaining the current OTA partition layout.
+
 ## v0.300 - 2026-10-26
 
 Safety and robustness release. **App and bench script must send `auth=<pin>` now.**
