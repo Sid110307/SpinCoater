@@ -37,7 +37,7 @@ estop
   Emergency stop immediately.
 
 clearfault
-  Clear emergency fault state.
+  Clear emergency fault state and the previous safety-stop reason after driver confirmation.
 
 rpm=<int>
   Set closed-loop target RPM.
@@ -105,7 +105,7 @@ ota_status
   Show OTA status.
 
 wifi=<ssid>|<password>
-  Save Wi-Fi credentials used for OTA checks.
+  Save Wi-Fi credentials used for OTA checks. Spaces are preserved in SSID and password.
 
 wifi_clear
   Remove saved OTA Wi-Fi credentials.

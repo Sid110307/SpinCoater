@@ -138,3 +138,4 @@ bool safetyEstopStuck() { return estopStuck; }
 bool safetyCommsOk() { return commsOk; }
 const char *safetyLastTrip() { return lastTrip; }
 void safetyClearTrip() { lastTrip = ""; }
+void safetyRecordTrip(const char *reason) { lastTrip = reason; }

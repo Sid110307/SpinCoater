@@ -9,5 +9,6 @@ void safetyBegin();
 uint32_t safetyHoldRemainingS();  // 0 when no hold timer is running or the limit is off
 bool safetyEstopStuck();          // emergency latched but the rotor is still turning
 bool safetyCommsOk();             // driver answered recently
-const char *safetyLastTrip();     // "", "hold_timeout", "link_lost", "driver_silent"
+const char *safetyLastTrip();     // empty, or the reason for the most recent safety stop
 void safetyClearTrip();
+void safetyRecordTrip(const char *reason);  // reason must have static storage (e.g. a string literal)
