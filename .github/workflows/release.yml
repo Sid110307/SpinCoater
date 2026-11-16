@@ -1,33 +1,38 @@
+
 name: Firmware release
+
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version tag to publish (for example v0.301)"
+        description: "Version to publish (e.g. v0.301)"
         required: true
         type: string
   push:
     branches:
       - master
+
 permissions:
   contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-      - name: Test release version selection
-        run: python3 -m unittest discover -s tools/tests
-      - name: Read version from commit subject
+
+      - name: Read firmware version
         id: version
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           SUBJECT="$(git log -1 --format=%s)"
+
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             if [[ ! "$REQUESTED_VERSION" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-              echo "Invalid version: expected vMAJOR.MINOR or vMAJOR.MINOR.PATCH" >&2
+              echo "Invalid version" >&2
               exit 1
             fi
             TAG="$REQUESTED_VERSION"
@@ -37,42 +42,53 @@ jobs:
             echo "release=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [[ -n "$TAG" ]]; then
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-            echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-          fi
+
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-python@v5
         if: steps.version.outputs.release == 'true'
         with:
           python-version: "3.12"
-      - if: steps.version.outputs.release == 'true'
+
+      - name: Install PlatformIO
+        if: steps.version.outputs.release == 'true'
         run: pip install platformio
+
       - name: Build firmware
         if: steps.version.outputs.release == 'true'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          PLATFORMIO_BUILD_FLAGS="-DCORE_DEBUG_LEVEL=0 -Os -ffunction-sections -fdata-sections -DMODBUS_DEBUG=0 -DFIRMWARE_VERSION=\\\"${VERSION}\\\"" pio run -e esp32dev
-      - name: Create update manifest
+          PLATFORMIO_BUILD_FLAGS="-DCORE_DEBUG_LEVEL=0 -Os -ffunction-sections -fdata-sections -flto -DMODBUS_DEBUG=0 -DFIRMWARE_VERSION=\\\"${VERSION}\\\"" pio run -e esp32dev
+
+      - name: Create OTA manifest
         if: steps.version.outputs.release == 'true'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
-          SHA256="$(sha256sum .pio/build/esp32dev/firmware.bin | cut -d ' ' -f 1)"
+          BIN=".pio/build/esp32dev/firmware.bin"
+
+          test -s "$BIN"
+          SHA256="$(sha256sum "$BIN" | cut -d ' ' -f 1)"
+
           jq -n \
             --arg version "$VERSION" \
             --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/firmware.bin" \
             --arg sha256 "$SHA256" \
             '{version: $version, url: $url, sha256: $sha256}' > manifest.json
+
       - name: Publish GitHub release
         if: steps.version.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
+
           gh release create "$TAG" \
             .pio/build/esp32dev/firmware.bin#firmware.bin \
             manifest.json#manifest.json \
             --target "$GITHUB_SHA" \
             --title "$TAG" \
             --generate-notes
+

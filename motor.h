@@ -2,9 +2,12 @@
 
 #include "config.h"
 
+void motorBegin();
 bool startMotor();
 bool stopMotor();
 void emergencyStopMotor();
+void motorServiceBrakeStop(float rpm);  // safety task: finish a braked stop once the rotor is slow
+bool motorBrakeStopPending();
 
 bool motorConfigureForRun(uint16_t accelMs);
 bool motorRun(bool running);

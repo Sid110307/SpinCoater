@@ -99,6 +99,7 @@ static constexpr uint32_t LINK_LOSS_STOP_MS = 3000;
 static constexpr uint32_t COMMS_LOSS_LIMIT_MS = 1500; // driver silent this long while running -> latch e-stop
 static constexpr uint32_t TASK_WDT_MS = 5000;
 static constexpr float SPINNING_RPM = 40.0f;          // above this the rotor is considered still turning
+static constexpr uint32_t BRAKE_STOP_TIMEOUT_MS = 10000; // braking this long without slowing -> drop Run and coast
 static constexpr uint16_t LED_REFRESH_MS = 50;
 
 struct MotorConfig {

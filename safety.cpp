@@ -73,26 +73,26 @@ static void superviseDriver(uint32_t now, bool running) {
   }
 }
 
-// While latched, keep telling the driver to stop until the rotor really is slow.
-static void superviseEstop(uint32_t now) {
-  static uint32_t lastTryMs = 0, stuckSince = 0;
+// While latched, keep the brake asserted with Run still on (Run=0 coasts and cancels the brake),
+// and drop Run once the rotor is slow, or after BRAKE_STOP_TIMEOUT_MS as a coast fallback.
+static void superviseEstop(uint32_t now, float rpm) {
+  static uint32_t lastTryMs = 0, latchedSince = 0;
+  static bool runDropped = false;
   if (!isEmergencyLatched()) {
     estopStuck = false;
-    stuckSince = 0;
+    latchedSince = 0;
+    runDropped = false;
     return;
   }
-  if (spinRpm() < SPINNING_RPM) {
-    estopStuck = false;
-    stuckSince = 0;
-    return;
-  }
-  if (stuckSince == 0) stuckSince = now ? now : 1;
-  if (now - stuckSince > 2000) estopStuck = true;
-  if (now - lastTryMs >= 250) {
-    lastTryMs = now;
-    mbCallUrgent(MbOp::Brake, 1, pdMS_TO_TICKS(120));
-    mbCallUrgent(MbOp::Run, 0, pdMS_TO_TICKS(120));
-  }
+  if (latchedSince == 0) latchedSince = now ? now : 1;
+  bool slow = rpm < SPINNING_RPM;
+  bool timedOut = now - latchedSince > BRAKE_STOP_TIMEOUT_MS;
+  estopStuck = !slow && timedOut;
+  if (runDropped || now - lastTryMs < 250) return;
+  lastTryMs = now;
+  mbCallUrgent(MbOp::Brake, 1, pdMS_TO_TICKS(120));
+  if ((slow || timedOut) && !runDropped)
+    runDropped = mbCallUrgent(MbOp::Run, 0, pdMS_TO_TICKS(120));
 }
 
 static void safetyTaskFn(void *) {
@@ -107,7 +107,9 @@ static void safetyTaskFn(void *) {
     superviseHold(now, running, rampActive);
     superviseLink(now, running, rampActive);
     superviseDriver(now, running);
-    superviseEstop(now);
+    float rpm = spinRpm();
+    superviseEstop(now, rpm);
+    motorServiceBrakeStop(rpm);
 
     if (!markedValid && now > 15000 && commsOk) {  // booted, driver answers: keep this image
       esp_ota_mark_app_valid_cancel_rollback();

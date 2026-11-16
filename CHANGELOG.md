@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.302 - 2026-11-17
+
+- Fixed latches during stop and e-stop.
+- Fixed LTO flag not being set.
+
 ## v0.301 - 2026-11-14
 
 - Clear the previous safety-stop reason after a successful motor start, ramp start, or `clearfault`.

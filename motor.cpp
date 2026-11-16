@@ -5,6 +5,22 @@
 #include "ota.h"
 #include "safety.h"
 
+static SemaphoreHandle_t motorMutex = nullptr;
+static volatile bool brakeStopPending = false;
+static uint32_t brakeStopSinceMs = 0;
+
+static void motorLock() {
+  if (motorMutex) xSemaphoreTakeRecursive(motorMutex, portMAX_DELAY);
+}
+
+static void motorUnlock() {
+  if (motorMutex) xSemaphoreGiveRecursive(motorMutex);
+}
+
+void motorBegin() {
+  motorMutex = xSemaphoreCreateRecursiveMutex();
+}
+
 static uint16_t clampClosedLoopRpm(uint16_t rpm) {
   if (rpm < CLOSED_LOOP_RPM_MIN) return CLOSED_LOOP_RPM_MIN;
   if (rpm > CLOSED_LOOP_RPM_MAX) return CLOSED_LOOP_RPM_MAX;
@@ -29,7 +45,7 @@ bool motorSetRuntimeSetpoint(uint16_t value) {
   return mbCall(MbOp::OpenLoopPercent, clampOpenLoopCommandRaw(value));
 }
 
-bool motorConfigureForRun(uint16_t accelMs) {
+static bool configureForRun(uint16_t accelMs) {
   if (!mbCall(MbOp::CommSource)) return false;
   if (!mbCall(MbOp::ControlMode, config.controlMode == ControlMode::ClosedLoop))
     return false;
@@ -44,6 +60,14 @@ bool motorConfigureForRun(uint16_t accelMs) {
   return true;
 }
 
+bool motorConfigureForRun(uint16_t accelMs) {
+  motorLock();
+  brakeStopPending = false;  // a new run supersedes a braked stop still in progress
+  bool ok = configureForRun(accelMs);
+  motorUnlock();
+  return ok;
+}
+
 bool motorRun(bool running) {
   if (running && physicalSafetyInputsActive()) return false;
   return mbCall(MbOp::Run, running ? 1 : 0);
@@ -53,34 +77,62 @@ bool startMotor() {
   if (isEmergencyLatched() || physicalSafetyInputsActive() || otaInProgress()) return false;
   Telemetry telemetry = mbTelemetry();
   if (telemetry.valid && telemetry.fault != 0) return false;
-  if (!motorConfigureForRun(config.accelerationMs)) return false;
+  motorLock();
+  bool ok = motorConfigureForRun(config.accelerationMs);
 
   uint16_t setpoint = config.controlMode == ControlMode::ClosedLoop
                         ? config.targetRpm
                         : config.openLoopCommandRaw;
-  if (!motorSetRuntimeSetpoint(setpoint)) return false;
-  if (!motorRun(true)) return false;
-
-  applyMotorRunState(true);
-  safetyClearTrip();
-  return true;
+  ok = ok && motorSetRuntimeSetpoint(setpoint) && motorRun(true);
+  if (ok) applyMotorRunState(true);
+  motorUnlock();
+  if (ok) safetyClearTrip();
+  return ok;
 }
 
 bool stopMotor() {
-  if (!mbCall(MbOp::Run, 0)) return false;
-  if (!mbCall(MbOp::Brake, 0)) return false;
-  applyMotorRunState(false);
-  return true;
+  motorLock();
+  bool ok = true;
+  if (mbCall(MbOp::Brake, 1)) {
+    // Keep Run on so the brake works; motorServiceBrakeStop() drops Run once the rotor is slow.
+    brakeStopPending = true;
+    brakeStopSinceMs = millis();
+  } else {
+    brakeStopPending = false;
+    ok = mbCall(MbOp::Run, 0);  // could not brake: at least coast
+  }
+  if (ok) applyMotorRunState(false);
+  motorUnlock();
+  return ok;
 }
 
-void emergencyStopMotor() {
-  // Brake first, then drop Run; retry a few times because the RS485 link may drop a frame.
-  for (int attempt = 0; attempt < 4; ++attempt) {
-    bool brake = mbCallUrgent(MbOp::Brake, 1, pdMS_TO_TICKS(120));
-    bool run = mbCallUrgent(MbOp::Run, 0, pdMS_TO_TICKS(120));
-    if (brake && run) break;
+void motorServiceBrakeStop(float rpm) {
+  if (!brakeStopPending) return;
+  motorLock();
+  if (brakeStopPending && isEmergencyLatched()) {
+    brakeStopPending = false;  // the e-stop supervisor owns the driver now
+  } else if (brakeStopPending &&
+             (rpm < SPINNING_RPM || millis() - brakeStopSinceMs > BRAKE_STOP_TIMEOUT_MS)) {
+    if (mbCall(MbOp::Run, 0)) {  // otherwise retry on the next tick
+      mbCall(MbOp::Brake, 0);    // a failure here is harmless: the next run releases it
+      brakeStopPending = false;
+    }
   }
-  applyMotorRunState(false);  // the supervisor keeps retrying while the rotor is still turning
+  motorUnlock();
+}
+
+bool motorBrakeStopPending() { return brakeStopPending; }
+
+void emergencyStopMotor() {
+  // Brake but leave Run on: Run=0 would cancel the brake and coast. Retry because the RS485
+  // link may drop a frame; the supervisor drops Run once the rotor is slow.
+  bool braked = false;
+  for (int attempt = 0; attempt < 4 && !braked; ++attempt)
+    braked = mbCallUrgent(MbOp::Brake, 1, pdMS_TO_TICKS(120));
+  if (!braked)
+    for (int attempt = 0; attempt < 4; ++attempt)
+      if (mbCallUrgent(MbOp::Run, 0, pdMS_TO_TICKS(120))) break;  // no brake: at least coast
+  applyMotorRunState(false);
 }
 
 bool changeControlMode(ControlMode controlMode) {

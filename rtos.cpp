@@ -8,6 +8,7 @@
 #include "config.h"
 #include "hardware.h"
 #include "modbus_task.h"
+#include "motor.h"
 #include "motor_profile.h"
 #include "ramp.h"
 #include "safety.h"
@@ -94,6 +95,7 @@ bool bluetoothBegin() {
 void rtosBegin() {
   gStateMutex = xSemaphoreCreateMutex();
 
+  motorBegin();
   modbusTaskBegin();
   rampBegin();
   motorProfileBegin();

@@ -134,7 +134,7 @@ String parse(String input) {
     if (input.equalsIgnoreCase("ping")) {
       return String("{\"pong\":") + millis() + "}";
     } else if (input.equalsIgnoreCase("reboot")) {
-      if (isMotorRunning() || otaInProgress()) return makeError("COMMAND_FAILED", "reboot");
+      if (isMotorRunning() || motorBrakeStopPending() || otaInProgress()) return makeError("COMMAND_FAILED", "reboot");
       xTaskCreate([](void *) { vTaskDelay(pdMS_TO_TICKS(300)); ESP.restart(); }, "reboot", 2048, nullptr, 1, nullptr);
       return RESP_OK;
     } else if (input.equalsIgnoreCase("start")) {
