@@ -88,6 +88,44 @@ static String profileJSON() {
   return o;
 }
 
+static String packetHex(const uint8_t *bytes, size_t count) {
+  static const char digits[] = "0123456789ABCDEF";
+  String text;
+  text.reserve(count * 3);
+  for (size_t i = 0; i < count; ++i) {
+    if (i) text += ' ';
+    text += digits[bytes[i] >> 4];
+    text += digits[bytes[i] & 0x0f];
+  }
+  return text;
+}
+
+static String driverPacketJSON(const String &hex) {
+  uint8_t request[DRIVER_PACKET_REQUEST_SIZE];
+  if (!parseDriverPacket(hex.c_str(), request))
+    return makeError("INVALID_VALUE", "driver_packet");
+  DriverPacketResult result;
+  bool completed = mbCallDriverPacket(request, result);
+  JsonDocument doc;
+  doc["type"] = "driver_packet";
+  doc["result"] = driverPacketStatusName(result.status);
+  doc["tx"] = packetHex(request, sizeof(request));
+  doc["rx"] = packetHex(result.response, result.responseLength);
+  doc["elapsed_us"] = result.elapsedUs;
+  doc["crc_valid"] = result.crcValid;
+  if (completed) doc["sent"] = result.transmitted;
+  if (result.status == DriverPacketStatus::Exception)
+    doc["exception_code"] = result.response[2];
+  if (result.status == DriverPacketStatus::Ok && request[1] == 0x03) {
+    JsonArray registers = doc["registers"].to<JsonArray>();
+    for (size_t i = 3; i + 2 < result.responseLength; i += 2)
+      registers.add((result.response[i] << 8) | result.response[i + 1]);
+  }
+  String output;
+  serializeJson(doc, output);
+  return output;
+}
+
 static bool parseInt(const String &text, long minimum, long maximum, long &out) {
   const char *start = text.c_str();
   char* end = nullptr;
@@ -181,6 +219,8 @@ String parse(String input) {
 
   if (command.equalsIgnoreCase("auth")) {
     return authCommand(value);
+  } else if (command.equalsIgnoreCase("driver_packet")) {
+    return driverPacketJSON(value);
   } else if (command.equalsIgnoreCase("setpin")) {
     if (!authSetPin(value)) return makeError("INVALID_VALUE", "setpin");
     return RESP_OK;

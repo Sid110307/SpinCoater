@@ -7,3 +7,4 @@
 *.ino.cpp
 tools/bench_runs/
 usb-kit/
+__pycache__/

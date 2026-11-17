@@ -8,7 +8,11 @@
 #include "config.h"
 #include "hardware.h"
 #include "modbus.h"
+#include "motor.h"
+#include "ota.h"
+#include "ramp.h"
 #include "rtos.h"
+#include <string.h>
 
 // Each calling task owns one Waiter (kept in its thread-local storage). A ticket makes a late reply to a
 // timed-out call harmless, and task notifications stay free for the emergency task's interrupt wake-up.
@@ -17,13 +21,19 @@ struct Waiter {
   volatile uint32_t doneTicket;
   volatile bool ok;
   uint32_t ticket;
+  DriverPacketResult packetResult;
 };
+
+static portMUX_TYPE waiterLock = portMUX_INITIALIZER_UNLOCKED;
 
 struct MbRequest {
   MbOp op;
   uint16_t arg;
   Waiter *waiter;
   uint32_t ticket;
+  uint8_t packet[DRIVER_PACKET_REQUEST_SIZE]{};
+  TickType_t packetQueuedAt = 0;
+  TickType_t packetBudget = 0;
 };
 
 static QueueHandle_t qNormal = nullptr;
@@ -68,6 +78,55 @@ static bool refreshOvercurrentAlarm() {
   return ok;
 }
 
+static bool manualWriteAllowed(const uint8_t *packet) {
+  uint16_t reg = (packet[2] << 8) | packet[3];
+  uint16_t value = (packet[4] << 8) | packet[5];
+  switch (reg) {
+    case 0x4001: return value >= POLE_PAIRS_MIN && value <= POLE_PAIRS_MAX;
+    case 0x4003: return value >= CURRENT_LIMIT_MIN_A && value <= CURRENT_LIMIT_MAX_A;
+    case 0x4004: return value >= PWM_MAX_MIN && value <= PWM_MAX_MAX;
+    case 0x4005: return value <= 1;
+    case 0x4006: return value >= CLOSED_LOOP_RPM_MIN && value <= CLOSED_LOOP_RPM_MAX;
+    case 0x4007: return value >= OPEN_LOOP_RAW_MIN && value <= OPEN_LOOP_RAW_MAX;
+    case 0x4011: return value >= ACCEL_MS_MIN && value <= ACCEL_MS_MAX;
+    case 0x4034: return value == 0;  // start through normal controls and safety supervision
+    case 0x4035: return value <= 1;
+    case 0x4036: return value == 1;  // never release the brake through the console
+    case 0x4037: return value == 1;  // selecting external IO could start the motor
+    case 0x4043: return value == 1;
+    default: return false;  // changing address/baud would disconnect controller supervision
+  }
+}
+
+static bool executeDriverPacket(const MbRequest &r, DriverPacketResult &result) {
+  result = {};
+  // Never transmit a diagnostic write left in the queue after its caller timed out.
+  TickType_t elapsed = xTaskGetTickCount() - r.packetQueuedAt;
+  if (elapsed >= r.packetBudget || r.packetBudget - elapsed <= pdMS_TO_TICKS(100))
+    return true;
+  // Recheck in the bus-owning task, rather than relying on state when enqueued.
+  if (isMotorRunning() || motorBrakeStopPending() || rampGetState().active || otaInProgress()) {
+    result.status = DriverPacketStatus::Busy;
+    return true;
+  }
+  if (r.packet[1] == 0x06) {
+    Telemetry t = mbTelemetry();
+    PulseSpeedSnapshot pulse = getPulseSpeedSnapshot();
+    if (isEmergencyLatched() || physicalSafetyInputsActive() || !t.valid ||
+        millis() - t.updatedMs >= COMMS_LOSS_LIMIT_MS || t.fault != 0 ||
+        t.speed >= SPINNING_RPM || (pulse.valid && pulse.rpm >= SPINNING_RPM)) {
+      result.status = DriverPacketStatus::SafetyLocked;
+      return true;
+    }
+    if (!manualWriteAllowed(r.packet)) {
+      result.status = DriverPacketStatus::UnsupportedWrite;
+      return true;
+    }
+  }
+  modbusExchangePacket(r.packet, result);
+  return true;
+}
+
 static bool execute(const MbRequest& r) {
   switch (r.op) {
   case MbOp::CommSource: return modbusUseCommunicationControl();
@@ -84,15 +143,34 @@ static bool execute(const MbRequest& r) {
   case MbOp::PwmMax: return modbusSetPwmMax(static_cast<uint8_t>(r.arg));
   case MbOp::RefreshTelemetry: return refreshTelemetry();
   case MbOp::RefreshOvercurrentAlarm: return refreshOvercurrentAlarm();
+  case MbOp::DriverPacket: return false;  // handled with its result by executeAndReply()
   }
   return false;
 }
 
-static void reply(const MbRequest &r, bool ok) {
+static void reply(const MbRequest &r, bool ok, const DriverPacketResult *packetResult = nullptr) {
   if (!r.waiter) return;
-  r.waiter->ok = ok;
-  r.waiter->doneTicket = r.ticket;
-  xSemaphoreGive(r.waiter->sem);
+  bool current;
+  portENTER_CRITICAL(&waiterLock);
+  current = r.waiter->ticket == r.ticket;
+  if (current) {
+    if (packetResult) r.waiter->packetResult = *packetResult;
+    r.waiter->ok = ok;
+    r.waiter->doneTicket = r.ticket;
+  }
+  portEXIT_CRITICAL(&waiterLock);
+  // An old normal-queue reply must not overwrite a newer urgent-queue reply.
+  if (current) xSemaphoreGive(r.waiter->sem);
+}
+
+static void executeAndReply(const MbRequest &r) {
+  if (r.op == MbOp::DriverPacket) {
+    DriverPacketResult result;
+    bool ok = executeDriverPacket(r, result);
+    reply(r, ok, &result);
+  } else {
+    reply(r, execute(r));
+  }
 }
 
 static void modbusTaskFn(void*) {
@@ -102,7 +180,7 @@ static void modbusTaskFn(void*) {
     esp_task_wdt_reset();
     // emergency is first priority
     if (xQueueReceive(qUrgent, &r, 0) == pdTRUE) {
-      reply(r, execute(r));
+      executeAndReply(r);
       continue;
     }
 
@@ -112,7 +190,7 @@ static void modbusTaskFn(void*) {
         reply(r, false);
         continue;
       }
-      reply(r, execute(r));
+      executeAndReply(r);
     }
   }
 }
@@ -135,7 +213,6 @@ static void telemetryTaskFn(void*) {
 static constexpr int MAX_WAITERS = 10;  // one per task that ever calls mbCall (comms, ramp, safety, ...)
 static TaskHandle_t waiterOwner[MAX_WAITERS];
 static Waiter waiterSlot[MAX_WAITERS];
-static portMUX_TYPE waiterLock = portMUX_INITIALIZER_UNLOCKED;
 
 static Waiter *myWaiter() {
   TaskHandle_t me = xTaskGetCurrentTaskHandle();
@@ -153,22 +230,33 @@ static Waiter *myWaiter() {
   return found;
 }
 
-static bool submit(QueueHandle_t q, MbOp op, uint16_t arg, TickType_t timeout) {
+static bool submit(QueueHandle_t q, MbOp op, uint16_t arg, TickType_t timeout,
+                   const uint8_t *packet = nullptr, DriverPacketResult *packetResult = nullptr) {
   if (!q) return false;
 
   Waiter *w = myWaiter();
   if (!w || !w->sem) return false;
+  portENTER_CRITICAL(&waiterLock);
   uint32_t ticket = ++w->ticket;
+  portEXIT_CRITICAL(&waiterLock);
   while (xSemaphoreTake(w->sem, 0) == pdTRUE) {}  // drop a stale reply from an earlier timed-out call
 
   MbRequest r{ op, arg, w, ticket };
+  if (packet) {
+    memcpy(r.packet, packet, sizeof(r.packet));
+    r.packetQueuedAt = xTaskGetTickCount();
+    r.packetBudget = timeout;
+  }
   if (xQueueSend(q, &r, timeout) != pdTRUE) return false;
 
   TickType_t start = xTaskGetTickCount();
   for (;;) {
     TickType_t used = xTaskGetTickCount() - start;
     if (used >= timeout || xSemaphoreTake(w->sem, timeout - used) != pdTRUE) return false;
-    if (w->doneTicket == ticket) return w->ok;  // otherwise it was a stale reply: keep waiting
+    if (w->doneTicket == ticket) {
+      if (w->ok && packetResult) *packetResult = w->packetResult;
+      return w->ok;
+    }  // otherwise it was a stale reply: keep waiting
   }
 }
 
@@ -178,6 +266,17 @@ bool mbCall(MbOp op, uint16_t arg, TickType_t timeout) {
 
 bool mbCallUrgent(MbOp op, uint16_t arg, TickType_t timeout) {
   return submit(qUrgent, op, arg, timeout);
+}
+
+bool mbCallDriverPacket(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE],
+                       DriverPacketResult &result, TickType_t timeout) {
+  result = {};
+  if (!driverPacketRequestValid(request)) return false;
+  // Reads remain available to diagnose a latched stop; writes use the normal safety gate.
+  QueueHandle_t queue = request[1] == 0x03 ? qUrgent : qNormal;
+  bool ok = submit(queue, MbOp::DriverPacket, 0, timeout, request, &result);
+  if (!ok && isEmergencyLatched()) result.status = DriverPacketStatus::SafetyLocked;
+  return ok;
 }
 
 Telemetry mbTelemetry() {

@@ -95,6 +95,17 @@ profile=stop
 profile=reset
   Clear the capture without starting a new one.
 
+driver_packet=<hex>
+  Send a single Modbus RTU diagnostic packet through the bus task (PIN required).
+  Supply 6 payload bytes for automatic CRC, or 8 bytes including a valid CRC.
+  Supports function 03 (1..125 registers) and 06 (approved configuration writes).
+  Example: driver_packet=01 03 40 41 00 01
+  Replies with type=driver_packet, result, TX/RX hex, CRC validity and elapsed_us.
+  Motor, ramp, braking and OTA must be idle. Reads also work with a latched stop.
+  Writes additionally require healthy stationary telemetry and clear safety inputs.
+  Manual start, brake release, external-IO selection, address/baud changes and
+  unsupported/out-of-range writes are rejected. Use normal controls to run.
+
 ota_check
   Check GitHub Releases for a newer firmware (does not install).
 

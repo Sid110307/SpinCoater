@@ -1,6 +1,7 @@
 #pragma once
 
 #include <freertos/FreeRTOS.h>
+#include "driver_packet.h"
 
 enum class MbOp : uint8_t {
   CommSource,
@@ -16,7 +17,8 @@ enum class MbOp : uint8_t {
   CurrentLimit,     // 3..35 A
   PwmMax,           // 10..100 %
   RefreshTelemetry,
-  RefreshOvercurrentAlarm
+  RefreshOvercurrentAlarm,
+  DriverPacket
 };
 
 struct Telemetry {
@@ -33,6 +35,8 @@ struct Telemetry {
 void modbusTaskBegin();
 bool mbCall(MbOp op, uint16_t arg = 0, TickType_t timeout = pdMS_TO_TICKS(300));
 bool mbCallUrgent(MbOp op, uint16_t arg = 0, TickType_t timeout = pdMS_TO_TICKS(300));
+bool mbCallDriverPacket(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE], DriverPacketResult &result,
+                       TickType_t timeout = pdMS_TO_TICKS(1000));
 
 Telemetry mbTelemetry();
 

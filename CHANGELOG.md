@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.303 - 2026-11-17
+
+- Added authenticated manual Modbus RTU packets with TX/RX hex, automatic or supplied CRC, timing, decoded registers and exception reporting.
+- Serialized diagnostic transactions with telemetry and motor commands; bounded noisy-bus receive time and kept queued packet storage valid after a caller timeout.
+- Restricted diagnostics to an idle controller, with additional safety checks and register/value limits for writes. Motor starts and brake release remain on the normal control path.
+
 ## v0.302 - 2026-11-17
 
 - Fixed latches during stop and e-stop.

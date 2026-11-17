@@ -1,8 +1,10 @@
 #pragma once
 
 #include <Arduino.h>
+#include "driver_packet.h"
 
 bool modbusBegin(uint16_t slaveAddress = 1);
+void modbusExchangePacket(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE], DriverPacketResult &result);
 
 bool modbusUseCommunicationControl();
 bool modbusSetControlMode(bool closedLoop);

@@ -45,7 +45,9 @@ static void clearRxBuffer() {
   while (ModbusSerial.available() > 0) ModbusSerial.read();
 }
 
-static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, size_t responseCapacity, size_t& responseLength) {
+static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, size_t responseCapacity, size_t& responseLength, bool *overflow = nullptr) {
+  responseLength = 0;
+  if (overflow) *overflow = false;
   if (!modbusReady) return false;
 
   clearRxBuffer();
@@ -64,14 +66,17 @@ static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, 
 
   for (;;) {
     while (ModbusSerial.available() > 0) {
+      if ((millis() - startMs) >= MODBUS_RESPONSE_TIMEOUT_MS) break;
       uint8_t b = static_cast<uint8_t>(ModbusSerial.read());
       if (responseLength < responseCapacity) response[responseLength++] = b;
+      else if (overflow) *overflow = true;
       lastByteUs = micros();
       gotByte = true;
     }
 
     if (gotByte && (micros() - lastByteUs) >= MODBUS_FRAME_GAP_US) break;
-    if (!gotByte && (millis() - startMs) >= MODBUS_RESPONSE_TIMEOUT_MS) break;
+    // Bound the whole receive window, including a noisy or continuously active bus.
+    if ((millis() - startMs) >= MODBUS_RESPONSE_TIMEOUT_MS) break;
     taskYIELD();
   }
 
@@ -89,6 +94,17 @@ static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, 
   uint16_t calculatedCrc = crc16(response, responseLength - 2);
 
   return receivedCrc == calculatedCrc;
+}
+
+void modbusExchangePacket(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE], DriverPacketResult &result) {
+  result = {};
+  bool overflow = false;
+  uint32_t started = micros();
+  result.transmitted = modbusReady;
+  tx(request, DRIVER_PACKET_REQUEST_SIZE, result.response, sizeof(result.response),
+     result.responseLength, &overflow);
+  result.elapsedUs = micros() - started;
+  classifyDriverPacketResponse(request, result, overflow);
 }
 
 static bool writeRegisterInternal(uint16_t reg, uint16_t value) {
