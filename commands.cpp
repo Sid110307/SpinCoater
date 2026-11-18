@@ -140,7 +140,6 @@ static bool parseInt(const String &text, long minimum, long maximum, long &out) 
   return true;
 }
 
-// Commands that can only make things safer or read public state work without the PIN.
 static bool openCommand(const String &input) {
   return input.equalsIgnoreCase("status") || input.equalsIgnoreCase("ping") || input.equalsIgnoreCase("stop") ||
          input.equalsIgnoreCase("estop") || input.equalsIgnoreCase("auth");
@@ -155,7 +154,6 @@ static String authCommand(const String &pin) {
 }
 
 String parse(String input) {
-  // Split before trimming: whitespace in a Wi-Fi password is significant.
   int sepIndex = input.indexOf('=');
   String value;
   if (sepIndex >= 0) {
@@ -164,7 +162,7 @@ String parse(String input) {
   }
   input.trim();
   if (input.length() == 0) return makeError("INVALID_CMD", "Empty command");
-  if (!input.equalsIgnoreCase("wifi")) value.trim();
+  value.trim();
 
   if (!openCommand(input) && !authSessionOk()) return makeError("AUTH_REQUIRED");
 
@@ -192,7 +190,7 @@ String parse(String input) {
     } else if (input.equalsIgnoreCase("clearfault")) {
       if (!clearEmergencyLatched()) return makeError("SAFETY_LOCKED");
       if (!mbCall(MbOp::ClearFault) || !stopMotor()) {
-        setEmergencyLatched(true);  // the driver did not confirm: stay latched
+        setEmergencyLatched(true);
         return makeError("COMMAND_FAILED", "clearfault");
       }
       mbCall(MbOp::RefreshTelemetry);
@@ -201,16 +199,12 @@ String parse(String input) {
       return RESP_OK;
     } else if (input.equalsIgnoreCase("profile")) {
       return profileJSON();
-    } else if (input.equalsIgnoreCase("ota_check") || input.equalsIgnoreCase("ota_install")) {
-      if (isMotorRunning() || rampGetState().active) return makeError("SAFETY_LOCKED");
-      if (!otaRequestCheck(input.equalsIgnoreCase("ota_install"))) return makeError("OTA_NOT_CONFIGURED");
-      return RESP_OK;
     } else if (input.equalsIgnoreCase("ota_status")) {
       return otaStatusJSON();
-    } else if (input.equalsIgnoreCase("wifi_clear")) {
-      if (otaInProgress()) return makeError("COMMAND_FAILED", "wifi_clear");
-      otaClearWifi();
-      return RESP_OK;
+    } else if (input.equalsIgnoreCase("ota_end")) {
+      return otaFinish();
+    } else if (input.equalsIgnoreCase("ota_abort")) {
+      return otaCancel();
     }
     return makeError("INVALID_CMD", input.c_str());
   }
@@ -241,14 +235,10 @@ String parse(String input) {
     else if (value.equalsIgnoreCase("reset")) motorProfileReset();
     else return makeError("INVALID_VALUE", "profile");
     return RESP_OK;
-  } else if (command.equalsIgnoreCase("wifi")) {
-    if (otaInProgress()) return makeError("COMMAND_FAILED", "wifi");
-    int separator = value.indexOf('|');
-    if (separator <= 0) return makeError("INVALID_VALUE", "wifi");
-    String ssid = value.substring(0, separator);
-    String password = value.substring(separator + 1);
-    if (!otaSetWifi(ssid, password)) return makeError("INVALID_VALUE", "wifi");
-    return RESP_OK;
+  } else if (command.equalsIgnoreCase("ota_begin")) {
+    return otaStart(value);
+  } else if (command.equalsIgnoreCase("ota_data")) {
+    return otaData(value);
   } else if (command.equalsIgnoreCase("rpm")) {
     long v;
     if (!parseInt(value, CLOSED_LOOP_RPM_MIN, CLOSED_LOOP_RPM_MAX, v))

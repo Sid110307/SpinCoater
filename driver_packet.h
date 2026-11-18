@@ -21,7 +21,6 @@ struct DriverPacketResult {
 };
 
 uint16_t driverPacketCrc(const uint8_t *data, size_t length);
-// Six payload bytes get a CRC appended; eight bytes must include a valid CRC.
 bool parseDriverPacket(const char *hex, uint8_t request[DRIVER_PACKET_REQUEST_SIZE]);
 bool driverPacketRequestValid(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE]);
 void classifyDriverPacketResponse(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE],

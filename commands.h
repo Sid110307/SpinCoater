@@ -106,19 +106,24 @@ driver_packet=<hex>
   Manual start, brake release, external-IO selection, address/baud changes and
   unsupported/out-of-range writes are rejected. Use normal controls to run.
 
-ota_check
-  Check GitHub Releases for a newer firmware (does not install).
+ota_begin=<size>,<sha256>
+  Start a firmware update sent over Bluetooth (PIN required, motor stopped).
+  Example: ota_begin=1048576,9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
 
-ota_install
-  Check and, if newer, download, verify (SHA-256) and install the update. The motor must be stopped.
+ota_data=<offset>,<base64>
+  Write the next block of the image (up to 2048 bytes, base64 encoded). <offset> must
+  equal the bytes written so far; a mismatch is ignored and the reply gives the real offset.
+  Replies with {"type":"ota","state":"receiving","written":<n>,"size":<n>}.
+
+ota_end
+  Verify the SHA-256, switch to the new image and restart. If the new firmware does not
+  stay up for 15 s the bootloader returns to the previous one.
+
+ota_abort
+  Cancel the update. It is also cancelled when the phone disconnects or no data
+  arrives for 20 s.
 
 ota_status
-  Show OTA status.
-
-wifi=<ssid>|<password>
-  Save Wi-Fi credentials used for OTA checks. Spaces are preserved in SSID and password.
-
-wifi_clear
-  Remove saved OTA Wi-Fi credentials.
+  Show OTA state and the running firmware version.
 */
 String parse(String input);

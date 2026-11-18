@@ -21,7 +21,7 @@ static int hexDigit(unsigned char c) {
 }
 
 bool driverPacketRequestValid(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE]) {
-  if (request[0] == 0 || request[0] > 247) return false;  // no broadcasts
+  if (request[0] == 0 || request[0] > 247) return false;
   if (request[1] != 0x03 && request[1] != 0x06) return false;
   if (request[1] == 0x03) {
     uint16_t count = (request[4] << 8) | request[5];

@@ -87,7 +87,7 @@ static bool parseProfile(const char *spec, RampProfile &out, const char **why) {
     unsigned long startValue = 0;
     if (!parseUnsigned(p, &end, startValue) || end != bar || !validSetpoint(startValue))
       return false;
-    if (startValue > 0 && !isMotorRunning()) {  // the first jump from standstill must be a ramp segment
+    if (startValue > 0 && !isMotorRunning()) {
       if (why) *why = "ramp_start";
       return false;
     }
@@ -119,7 +119,7 @@ static bool parseProfile(const char *spec, RampProfile &out, const char **why) {
         if (why) *why = "ramp_accel";
         return false;
       }
-    } else if (target > previous) {  // an instant step is only allowed downward (e.g. to 0 to stop)
+    } else if (target > previous) {
       if (why) *why = "ramp_accel";
       return false;
     }
@@ -186,7 +186,7 @@ static void rampTaskFn(void *) {
     unlock();
 
     bool applied = false;
-    for (int attempt = 0; attempt < 3 && !applied; ++attempt) applied = applyRampSetpoint(setpoint);  // one dropped RS485 frame must not latch an e-stop
+    for (int attempt = 0; attempt < 3 && !applied; ++attempt) applied = applyRampSetpoint(setpoint);
     if (!applied) {
       active = false;
       safetyRecordTrip("ramp_failed");
@@ -216,7 +216,7 @@ bool rampStartProfile(const char *spec, const char **errField) {
     return false;
   }
 
-  active = false;  // a running ramp must not see the new profile with the old start time
+  active = false;
   lock();
   profile = parsed;
   startMs = millis();

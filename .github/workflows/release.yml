@@ -1,16 +1,10 @@
-
 name: Firmware release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to publish (e.g. v0.301)"
-        required: true
-        type: string
   push:
     branches:
       - master
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,73 +16,78 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read firmware version
+      - name: Read version
         id: version
         env:
-          REQUESTED_VERSION: ${{ inputs.version }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
+          VERSION="$(sed -n 's/.*-DFIRMWARE_VERSION=\\"\([0-9.]*\)\\".*/\1/p' platformio.ini)"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "FIRMWARE_VERSION not found in platformio.ini" >&2
+            exit 1
+          fi
+          TAG="v$VERSION"
           SUBJECT="$(git log -1 --format=%s)"
 
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            if [[ ! "$REQUESTED_VERSION" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-              echo "Invalid version" >&2
-              exit 1
-            fi
-            TAG="$REQUESTED_VERSION"
-          elif [[ "$SUBJECT" =~ ^(SpinCoater[[:space:]]+)?(v[0-9]+\.[0-9]+(\.[0-9]+)?)(:[[:space:]].*)?$ ]]; then
-            TAG="${BASH_REMATCH[2]}"
-          else
+          if [[ "$EVENT_NAME" != "workflow_dispatch" && ! "$SUBJECT" =~ ^v[0-9] ]]; then
             echo "release=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          if [[ "$EVENT_NAME" != "workflow_dispatch" && "${SUBJECT%%[: ]*}" != "$TAG" ]]; then
+            echo "Commit subject ${SUBJECT%%[: ]*} does not match platformio.ini $TAG" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
+            echo "$TAG is already released" >&2
+            exit 1
           fi
 
           echo "release=true" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v5
         if: steps.version.outputs.release == 'true'
         with:
           python-version: "3.12"
 
-      - name: Install PlatformIO
-        if: steps.version.outputs.release == 'true'
-        run: pip install platformio
-
-      - name: Build firmware
+      - name: Build
         if: steps.version.outputs.release == 'true'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          PLATFORMIO_BUILD_FLAGS="-DCORE_DEBUG_LEVEL=0 -Os -ffunction-sections -fdata-sections -flto -DMODBUS_DEBUG=0 -DFIRMWARE_VERSION=\\\"${VERSION}\\\"" pio run -e esp32dev
+          pip install platformio
+          pio run -e esp32dev
 
-      - name: Create OTA manifest
+      - name: Check image
         if: steps.version.outputs.release == 'true'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          TAG="${{ steps.version.outputs.tag }}"
-          BIN=".pio/build/esp32dev/firmware.bin"
+          BIN=.pio/build/esp32dev/firmware.bin
+          SIZE=$(stat -c %s "$BIN")
+          SLOT=$((0x1E0000))
+          echo "firmware.bin: $SIZE of $SLOT bytes"
+          test "$SIZE" -le "$SLOT"
+          grep -qa "${{ steps.version.outputs.version }}" "$BIN"
 
-          test -s "$BIN"
-          SHA256="$(sha256sum "$BIN" | cut -d ' ' -f 1)"
-
+      - name: Create manifest
+        if: steps.version.outputs.release == 'true'
+        run: |
+          SHA256="$(sha256sum .pio/build/esp32dev/firmware.bin | cut -d ' ' -f 1)"
           jq -n \
-            --arg version "$VERSION" \
-            --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/firmware.bin" \
+            --arg version "${{ steps.version.outputs.version }}" \
+            --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ steps.version.outputs.tag }}/firmware.bin" \
             --arg sha256 "$SHA256" \
             '{version: $version, url: $url, sha256: $sha256}' > manifest.json
 
-      - name: Publish GitHub release
+      - name: Publish
         if: steps.version.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-
+          NOTES="$(awk -v t="## $TAG" 'index($0, t) == 1 {f=1; next} /^## / {f=0} f' CHANGELOG.md)"
           gh release create "$TAG" \
             .pio/build/esp32dev/firmware.bin#firmware.bin \
             manifest.json#manifest.json \
             --target "$GITHUB_SHA" \
             --title "$TAG" \
-            --generate-notes
-
+            --notes "${NOTES:-$TAG}" \
+            --latest

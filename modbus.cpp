@@ -75,7 +75,6 @@ static bool tx(const uint8_t* request, size_t requestLength, uint8_t* response, 
     }
 
     if (gotByte && (micros() - lastByteUs) >= MODBUS_FRAME_GAP_US) break;
-    // Bound the whole receive window, including a noisy or continuously active bus.
     if ((millis() - startMs) >= MODBUS_RESPONSE_TIMEOUT_MS) break;
     taskYIELD();
   }
@@ -140,14 +139,12 @@ static bool readRegistersInternal(uint16_t reg, uint8_t count, uint16_t* out) {
 
   uint8_t request[8];
   size_t requestLength = buildFrame(payload, sizeof(payload), request);
-  // header(3) + count*2 + crc(2)
   uint8_t response[5 + 2 * 32];
   size_t responseLength = 0;
 
   if (!tx(request, requestLength, response, sizeof(response), responseLength))
     return false;
   if (response[0] != modbusSlaveAddress) return false;
-  // exception
   if (response[1] == (0x03 | 0x80)) return false;
   if (response[1] != 0x03) return false;
 

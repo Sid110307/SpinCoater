@@ -53,7 +53,7 @@ uint32_t authLockoutRemainingS() {
 
 int authTry(const String &candidate) {
   if (authLockoutRemainingS() > 0) return 2;
-  if (failures >= MAX_FAILURES) failures = 0;  // lock-out expired
+  if (failures >= MAX_FAILURES) failures = 0;
   if (constantTimeEquals(candidate, pin)) {
     failures = 0;
     session = true;

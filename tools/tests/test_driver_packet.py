@@ -1,4 +1,3 @@
-"""Host-only protocol tests; no ESP32, Bluetooth or driver traffic."""
 import pathlib
 import shutil
 import subprocess

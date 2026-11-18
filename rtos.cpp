@@ -2,6 +2,7 @@
 
 #include <BluetoothSerial.h>
 #include <esp_task_wdt.h>
+#include <freertos/stream_buffer.h>
 
 #include "auth.h"
 #include "commands.h"
@@ -10,12 +11,15 @@
 #include "modbus_task.h"
 #include "motor.h"
 #include "motor_profile.h"
+#include "ota.h"
 #include "ramp.h"
 #include "safety.h"
 
 SemaphoreHandle_t gStateMutex = nullptr;
 TaskHandle_t gEmergencyTaskHandle = nullptr;
 static BluetoothSerial BT;
+static StreamBufferHandle_t rxStream = nullptr;
+static constexpr size_t RX_STREAM_BYTES = 8192;
 
 static void emergencyTaskFn(void *) {
   static uint32_t lastMs = 0;
@@ -34,8 +38,8 @@ static void emergencyTaskFn(void *) {
 }
 
 static void commsTaskFn(void *) {
-  static constexpr size_t BUF = 1024;
-  char line[BUF];
+  static constexpr size_t BUF = 4096;
+  static char line[BUF];
   size_t len = 0;
   bool overflow = false;
   bool wasConnected = false;
@@ -45,15 +49,19 @@ static void commsTaskFn(void *) {
     esp_task_wdt_reset();
     bool connected = BT.hasClient();
     setBluetoothConnected(connected);
-    if (wasConnected && !connected) {  // a new client must authenticate again
+    if (wasConnected && !connected) {
       authReset();
+      xStreamBufferReset(rxStream);
       len = 0;
       overflow = false;
     }
     wasConnected = connected;
+    otaService(connected);
 
-    while (BT.available() > 0) {
-      char c = static_cast<char>(BT.read());
+    uint8_t rx[256];
+    size_t count = xStreamBufferReceive(rxStream, rx, sizeof(rx), pdMS_TO_TICKS(2));
+    for (size_t i = 0; i < count; ++i) {
+      char c = static_cast<char>(rx[i]);
       if (c == '\r') continue;
 
       if (c == '\n') {
@@ -72,8 +80,6 @@ static void commsTaskFn(void *) {
       if (len < BUF - 1) line[len++] = c;
       else overflow = true;
     }
-
-    vTaskDelay(pdMS_TO_TICKS(5));
   }
 }
 
@@ -87,6 +93,9 @@ static void ledTaskFn(void *) {
 }
 
 bool bluetoothBegin() {
+  rxStream = xStreamBufferCreate(RX_STREAM_BYTES, 1);
+  if (!rxStream) return false;
+  BT.onData([](const uint8_t *data, size_t size) { xStreamBufferSend(rxStream, data, size, 0); });
   if (!BT.begin("SpinCoat")) return false;
   BT.println("Ready");
   return true;

@@ -61,7 +61,6 @@ int main() {
   assert(parseDriverPacket("01 06 40 03 00 03", request));
   assert(classify(frame({1,6,0x40,3,0,3})) == DriverPacketStatus::Ok);
   assert(classify(frame({1,6,0x40,3,0,4})) == DriverPacketStatus::InvalidResponse);
-  // A corrupt reported length is rejected before touching the response buffer.
   result.responseLength = DRIVER_PACKET_RESPONSE_SIZE + 1;
   classifyDriverPacketResponse(request, result, false);
   assert(result.status == DriverPacketStatus::Overflow);

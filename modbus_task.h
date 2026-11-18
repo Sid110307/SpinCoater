@@ -5,30 +5,30 @@
 
 enum class MbOp : uint8_t {
   CommSource,
-  ControlMode,      // 0 open loop, 1 closed loop
-  ClosedLoopRpm,    // rpm, 200..4000
-  OpenLoopPercent,  // raw 100..1000 (10% .. 100%)
-  AccelMs,          // 300..15000
-  Run,              // 0 stop, 1 run
-  Direction,        // 0 CW, 1 CCW
-  Brake,            // 0 release, 1 brake
+  ControlMode,
+  ClosedLoopRpm,
+  OpenLoopPercent,
+  AccelMs,
+  Run,
+  Direction,
+  Brake,
   ClearFault,
-  PolePairs,        // 1..10
-  CurrentLimit,     // 3..35 A
-  PwmMax,           // 10..100 %
+  PolePairs,
+  CurrentLimit,
+  PwmMax,
   RefreshTelemetry,
   RefreshOvercurrentAlarm,
   DriverPacket
 };
 
 struct Telemetry {
-  uint16_t voltage = 0;  // V
-  uint16_t current = 0;  // 10 mA units
-  uint16_t power = 0;    // 0.1 W units
-  uint16_t speed = 0;    // rpm
-  uint16_t fault = 0;    // fault code
-  bool valid = false;  // every register read answered
-  bool anyOk = false;  // at least one register read answered (the driver is alive)
+  uint16_t voltage = 0;
+  uint16_t current = 0;
+  uint16_t power = 0;
+  uint16_t speed = 0;
+  uint16_t fault = 0;
+  bool valid = false;
+  bool anyOk = false;
   uint32_t updatedMs = 0;
 };
 

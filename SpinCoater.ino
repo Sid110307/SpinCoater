@@ -1,6 +1,6 @@
 /**********************************************************************
  *   Spin Coater Motor Controller
- *   Ver: 0.303 | Date: 17/11/26
+ *   Ver: 0.304 | Date: 18/11/26
  *   Authors: K. Bhaskar, Siddharth P Bharadwaj
  */
 
@@ -11,12 +11,13 @@
 #include "hardware.h"
 #include "modbus.h"
 #include "modbus_task.h"
-#include "ota.h"
 #include "rtos.h"
 #include "safety.h"
 
 Preferences prefs;
 MotorConfig config;
+
+bool verifyRollbackLater() { return true; }
 
 void setup() {
   Serial.begin(115200);
@@ -30,7 +31,7 @@ void setup() {
     Serial.println("Modbus init failed");
     setEmergencyLatched(true);
     delay(15000);
-    ESP.restart();  // try again instead of sitting dead
+    ESP.restart();
   }
 
   if (!bluetoothBegin()) {
@@ -40,9 +41,8 @@ void setup() {
 
   rtosBegin();
   safetyBegin();
-  mbCallUrgent(MbOp::Run, 0);  // known state after any reset, including a watchdog one
+  mbCallUrgent(MbOp::Run, 0);
   mbCall(MbOp::RefreshOvercurrentAlarm);
-  otaBegin();
 
   attachInterrupt(digitalPinToInterrupt(Pins::EMERGENCY), handleEmergencyInterrupt, FALLING);
   attachInterrupt(digitalPinToInterrupt(Pins::LIMIT_SWITCH), handleEmergencyInterrupt, FALLING);

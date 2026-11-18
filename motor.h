@@ -6,7 +6,7 @@ void motorBegin();
 bool startMotor();
 bool stopMotor();
 void emergencyStopMotor();
-void motorServiceBrakeStop(float rpm);  // safety task: finish a braked stop once the rotor is slow
+void motorServiceBrakeStop(float rpm);
 bool motorBrakeStopPending();
 
 bool motorConfigureForRun(uint16_t accelMs);

@@ -296,7 +296,6 @@ void updateStatusIndicators() {
   digitalWrite(Pins::BUZZER, buzzerOn ? HIGH : LOW);
 }
 
-// Wake emergency task from ISR
 void IRAM_ATTR handleEmergencyInterrupt() {
   BaseType_t hpw = pdFALSE;
   if (gEmergencyTaskHandle) vTaskNotifyGiveFromISR(gEmergencyTaskHandle, &hpw);

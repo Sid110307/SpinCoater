@@ -14,8 +14,6 @@
 #include "rtos.h"
 #include <string.h>
 
-// Each calling task owns one Waiter (kept in its thread-local storage). A ticket makes a late reply to a
-// timed-out call harmless, and task notifications stay free for the emergency task's interrupt wake-up.
 struct Waiter {
   SemaphoreHandle_t sem;
   volatile uint32_t doneTicket;
@@ -89,22 +87,20 @@ static bool manualWriteAllowed(const uint8_t *packet) {
     case 0x4006: return value >= CLOSED_LOOP_RPM_MIN && value <= CLOSED_LOOP_RPM_MAX;
     case 0x4007: return value >= OPEN_LOOP_RAW_MIN && value <= OPEN_LOOP_RAW_MAX;
     case 0x4011: return value >= ACCEL_MS_MIN && value <= ACCEL_MS_MAX;
-    case 0x4034: return value == 0;  // start through normal controls and safety supervision
+    case 0x4034: return value == 0;
     case 0x4035: return value <= 1;
-    case 0x4036: return value == 1;  // never release the brake through the console
-    case 0x4037: return value == 1;  // selecting external IO could start the motor
+    case 0x4036: return value == 1;
+    case 0x4037: return value == 1;
     case 0x4043: return value == 1;
-    default: return false;  // changing address/baud would disconnect controller supervision
+    default: return false;
   }
 }
 
 static bool executeDriverPacket(const MbRequest &r, DriverPacketResult &result) {
   result = {};
-  // Never transmit a diagnostic write left in the queue after its caller timed out.
   TickType_t elapsed = xTaskGetTickCount() - r.packetQueuedAt;
   if (elapsed >= r.packetBudget || r.packetBudget - elapsed <= pdMS_TO_TICKS(100))
     return true;
-  // Recheck in the bus-owning task, rather than relying on state when enqueued.
   if (isMotorRunning() || motorBrakeStopPending() || rampGetState().active || otaInProgress()) {
     result.status = DriverPacketStatus::Busy;
     return true;
@@ -143,7 +139,7 @@ static bool execute(const MbRequest& r) {
   case MbOp::PwmMax: return modbusSetPwmMax(static_cast<uint8_t>(r.arg));
   case MbOp::RefreshTelemetry: return refreshTelemetry();
   case MbOp::RefreshOvercurrentAlarm: return refreshOvercurrentAlarm();
-  case MbOp::DriverPacket: return false;  // handled with its result by executeAndReply()
+  case MbOp::DriverPacket: return false;
   }
   return false;
 }
@@ -159,7 +155,6 @@ static void reply(const MbRequest &r, bool ok, const DriverPacketResult *packetR
     r.waiter->doneTicket = r.ticket;
   }
   portEXIT_CRITICAL(&waiterLock);
-  // An old normal-queue reply must not overwrite a newer urgent-queue reply.
   if (current) xSemaphoreGive(r.waiter->sem);
 }
 
@@ -178,14 +173,12 @@ static void modbusTaskFn(void*) {
   MbRequest r;
   for (;;) {
     esp_task_wdt_reset();
-    // emergency is first priority
     if (xQueueReceive(qUrgent, &r, 0) == pdTRUE) {
       executeAndReply(r);
       continue;
     }
 
     if (xQueueReceive(qNormal, &r, pdMS_TO_TICKS(5)) == pdTRUE) {
-      // ignore everything else while emergency is latched
       if (isEmergencyLatched()) {
         reply(r, false);
         continue;
@@ -205,12 +198,12 @@ static void telemetryTaskFn(void*) {
       Telemetry telemetry = mbTelemetry();
       if (telemetry.valid && telemetry.fault != 0) setEmergencyLatched(true);
     } else {
-      mbCallUrgent(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));  // keep the speed reading alive while braking
+      mbCallUrgent(MbOp::RefreshTelemetry, 0, pdMS_TO_TICKS(300));
     }
   }
 }
 
-static constexpr int MAX_WAITERS = 10;  // one per task that ever calls mbCall (comms, ramp, safety, ...)
+static constexpr int MAX_WAITERS = 10;
 static TaskHandle_t waiterOwner[MAX_WAITERS];
 static Waiter waiterSlot[MAX_WAITERS];
 
@@ -239,7 +232,7 @@ static bool submit(QueueHandle_t q, MbOp op, uint16_t arg, TickType_t timeout,
   portENTER_CRITICAL(&waiterLock);
   uint32_t ticket = ++w->ticket;
   portEXIT_CRITICAL(&waiterLock);
-  while (xSemaphoreTake(w->sem, 0) == pdTRUE) {}  // drop a stale reply from an earlier timed-out call
+  while (xSemaphoreTake(w->sem, 0) == pdTRUE) {}
 
   MbRequest r{ op, arg, w, ticket };
   if (packet) {
@@ -256,7 +249,7 @@ static bool submit(QueueHandle_t q, MbOp op, uint16_t arg, TickType_t timeout,
     if (w->doneTicket == ticket) {
       if (w->ok && packetResult) *packetResult = w->packetResult;
       return w->ok;
-    }  // otherwise it was a stale reply: keep waiting
+    }
   }
 }
 
@@ -272,7 +265,6 @@ bool mbCallDriverPacket(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE],
                        DriverPacketResult &result, TickType_t timeout) {
   result = {};
   if (!driverPacketRequestValid(request)) return false;
-  // Reads remain available to diagnose a latched stop; writes use the normal safety gate.
   QueueHandle_t queue = request[1] == 0x03 ? qUrgent : qNormal;
   bool ok = submit(queue, MbOp::DriverPacket, 0, timeout, request, &result);
   if (!ok && isEmergencyLatched()) result.status = DriverPacketStatus::SafetyLocked;

@@ -76,7 +76,13 @@ static void bufferSampleLocked(const MotorProfileSample &sample) {
 }
 
 static void addSampleLocked(uint32_t elapsedUs, float rpm, bool pulseValid) {
-  float acceleration = accelerationForLocked(elapsedUs, rpm);
+  float acceleration = 0.0f;
+  if (pulseValid) {
+    acceleration = accelerationForLocked(elapsedUs, rpm);
+  } else {
+    derivativeHead = 0;
+    derivativeCount = 0;
+  }
   Telemetry telemetry = mbTelemetry();
   MotorProfileSample sample{ elapsedUs, rpm, acceleration, pulseValid,
                              telemetry.voltage, telemetry.current };

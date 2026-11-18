@@ -18,7 +18,7 @@ static const char *volatile lastTrip = "";
 static void trip(const char *reason) {
   lastTrip = reason;
   rampStop();
-  if (!stopMotor()) setEmergencyLatched(true);  // could not stop politely: latch and brake
+  if (!stopMotor()) setEmergencyLatched(true);
 }
 
 static float spinRpm() {
@@ -59,7 +59,7 @@ static void superviseDriver(uint32_t now, bool running) {
   static uint32_t badSince = 0;
   Telemetry t = mbTelemetry();
   bool fresh = t.anyOk && (now - t.updatedMs) < COMMS_LOSS_LIMIT_MS;
-  commsOk = fresh || !t.updatedMs;  // no telemetry yet counts as fine until the first cycle
+  commsOk = fresh || !t.updatedMs;
   if (fresh || !running) {
     badSince = 0;
     return;
@@ -73,8 +73,6 @@ static void superviseDriver(uint32_t now, bool running) {
   }
 }
 
-// While latched, keep the brake asserted with Run still on (Run=0 coasts and cancels the brake),
-// and drop Run once the rotor is slow, or after BRAKE_STOP_TIMEOUT_MS as a coast fallback.
 static void superviseEstop(uint32_t now, float rpm) {
   static uint32_t lastTryMs = 0, latchedSince = 0;
   static bool runDropped = false;
@@ -111,7 +109,7 @@ static void safetyTaskFn(void *) {
     superviseEstop(now, rpm);
     motorServiceBrakeStop(rpm);
 
-    if (!markedValid && now > 15000 && commsOk) {  // booted, driver answers: keep this image
+    if (!markedValid && now > 15000) {
       esp_ota_mark_app_valid_cancel_rollback();
       markedValid = true;
     }
