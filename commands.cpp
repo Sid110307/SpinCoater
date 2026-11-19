@@ -170,7 +170,8 @@ String parse(String input) {
     if (input.equalsIgnoreCase("ping")) {
       return String("{\"pong\":") + millis() + "}";
     } else if (input.equalsIgnoreCase("reboot")) {
-      if (isMotorRunning() || motorBrakeStopPending() || otaInProgress()) return makeError("COMMAND_FAILED", "reboot");
+      if (isMotorRunning() || motorBrakeStopPending() || otaInProgress() || !stoppedFeedback(motorStopFeedback()))
+        return makeError("COMMAND_FAILED", "reboot");
       xTaskCreate([](void *) { vTaskDelay(pdMS_TO_TICKS(300)); ESP.restart(); }, "reboot", 2048, nullptr, 1, nullptr);
       return RESP_OK;
     } else if (input.equalsIgnoreCase("start")) {
@@ -188,6 +189,9 @@ String parse(String input) {
       setEmergencyLatched(true);
       return RESP_OK;
     } else if (input.equalsIgnoreCase("clearfault")) {
+      if (!stoppedFeedback(motorStopFeedback()) ||
+          (isEmergencyLatched() && !motorEmergencyStopConfirmed()))
+        return makeError("SAFETY_LOCKED");
       if (!clearEmergencyLatched()) return makeError("SAFETY_LOCKED");
       if (!mbCall(MbOp::ClearFault) || !stopMotor()) {
         setEmergencyLatched(true);

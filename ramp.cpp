@@ -11,6 +11,7 @@
 
 #include "hardware.h"
 #include "motor.h"
+#include "modbus_task.h"
 #include "ota.h"
 #include "rtos.h"
 #include "safety.h"
@@ -31,8 +32,27 @@ static SemaphoreHandle_t rampMutex = nullptr;
 static RampProfile profile{};
 static volatile bool active = false;
 static uint32_t startMs = 0;
+static portMUX_TYPE generationMux = portMUX_INITIALIZER_UNLOCKED;
+static uint32_t generation = 0;
 
-static bool applyRampSetpoint(uint16_t setpoint) {
+static bool generationMatches(uint32_t expected) {
+  portENTER_CRITICAL(&generationMux);
+  bool matches = generation == expected;
+  portEXIT_CRITICAL(&generationMux);
+  return matches;
+}
+
+static uint32_t cancelProfile() {
+  portENTER_CRITICAL(&generationMux);
+  uint32_t next = ++generation;
+  active = false;
+  portEXIT_CRITICAL(&generationMux);
+  return next;
+}
+
+static bool applyRampSetpoint(uint16_t setpoint, uint32_t expected) {
+  uint32_t epoch = mbMotionEpoch();
+  if (!generationMatches(expected) || isEmergencyLatched() || physicalSafetyInputsActive()) return false;
   if (setpoint == 0) {
     if (!isMotorRunning()) return true;
     return stopMotor();
@@ -42,8 +62,10 @@ static bool applyRampSetpoint(uint16_t setpoint) {
     return true;
   if (isMotorRunning()) return motorSetRuntimeSetpoint(setpoint);
   if (!motorConfigureForRun(ACCEL_MS_MIN)) return false;
+  if (!generationMatches(expected) || isEmergencyLatched()) return false;
   if (!motorSetRuntimeSetpoint(setpoint)) return false;
-  if (!motorRun(true)) return false;
+  if (!generationMatches(expected) || isEmergencyLatched()) return false;
+  if (!motorRun(true, epoch)) return false;
   applyMotorRunState(true);
   return true;
 }
@@ -183,10 +205,17 @@ static void rampTaskFn(void *) {
     if (done) elapsed = profile.totalMs;
     uint16_t setpoint = setpointAt(elapsed);
     uint16_t finalTarget = profile.segments[profile.count - 1].target;
+    portENTER_CRITICAL(&generationMux);
+    uint32_t expected = generation;
+    bool stillActive = active;
+    portEXIT_CRITICAL(&generationMux);
     unlock();
+    if (!stillActive) continue;
 
     bool applied = false;
-    for (int attempt = 0; attempt < 3 && !applied; ++attempt) applied = applyRampSetpoint(setpoint);
+    for (int attempt = 0; attempt < 3 && !applied && generationMatches(expected); ++attempt)
+      applied = applyRampSetpoint(setpoint, expected);
+    if (!generationMatches(expected)) continue;
     if (!applied) {
       active = false;
       safetyRecordTrip("ramp_failed");
@@ -216,22 +245,26 @@ bool rampStartProfile(const char *spec, const char **errField) {
     return false;
   }
 
-  active = false;
+  uint32_t expected = cancelProfile();
   lock();
   profile = parsed;
   startMs = millis();
   unlock();
 
-  if (!applyRampSetpoint(parsed.startValue)) return false;
+  if (!applyRampSetpoint(parsed.startValue, expected)) return false;
   safetyClearTrip();
-  startMs = millis();
-  active = true;
+  portENTER_CRITICAL(&generationMux);
+  bool current = generation == expected;
+  if (current) { startMs = millis(); active = true; }
+  portEXIT_CRITICAL(&generationMux);
+  if (!current) return false;
   if (errField) *errField = nullptr;
   return true;
 }
 
 void rampStop() {
-  active = false;
+  cancelProfile();
+  mbInvalidateMotion();
 }
 
 RampState rampGetState() {

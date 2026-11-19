@@ -185,7 +185,7 @@ void setMotorDirection(MotorDirection direction) {
 
 void applyMotorRunState(bool running) {
   stateLock();
-  state.motorRunning = running;
+  state.motorRunning = running && !state.emergencyLatched;
   stateUnlock();
 }
 
@@ -204,7 +204,10 @@ void setEmergencyLatched(bool latched) {
   state.emergencyLatched = latched;
   stateUnlock();
 
-  if (latched && changed) emergencyStopMotor();
+  if (latched && changed) {
+    mbInvalidateMotion();
+    emergencyStopMotor();
+  }
 }
 
 bool isEmergencyLatched() {

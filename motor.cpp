@@ -8,6 +8,37 @@
 static SemaphoreHandle_t motorMutex = nullptr;
 static volatile bool brakeStopPending = false;
 static uint32_t brakeStopSinceMs = 0;
+static StopConfirmation normalStopConfirmation;
+static portMUX_TYPE emergencyMux = portMUX_INITIALIZER_UNLOCKED;
+static bool emergencyStopped = false;
+static uint32_t emergencySequence = 0;
+
+StopFeedback motorStopFeedback(uint32_t requestedMs) {
+  Telemetry t = mbTelemetry();
+  PulseSpeedSnapshot pulse = getPulseSpeedSnapshot();
+  return {millis(), requestedMs, t.speedUpdatedMs, static_cast<float>(t.speed),
+          t.speedValid, pulse.rpm, pulse.valid};
+}
+
+uint32_t motorEmergencySequence() {
+  portENTER_CRITICAL(&emergencyMux);
+  uint32_t sequence = emergencySequence;
+  portEXIT_CRITICAL(&emergencyMux);
+  return sequence;
+}
+
+bool motorEmergencyStopConfirmed() {
+  portENTER_CRITICAL(&emergencyMux);
+  bool stopped = emergencyStopped;
+  portEXIT_CRITICAL(&emergencyMux);
+  return stopped;
+}
+
+void motorSetEmergencyStopConfirmed(bool confirmed) {
+  portENTER_CRITICAL(&emergencyMux);
+  emergencyStopped = confirmed;
+  portEXIT_CRITICAL(&emergencyMux);
+}
 
 static void motorLock() {
   if (motorMutex) xSemaphoreTakeRecursive(motorMutex, portMAX_DELAY);
@@ -68,22 +99,23 @@ bool motorConfigureForRun(uint16_t accelMs) {
   return ok;
 }
 
-bool motorRun(bool running) {
-  if (running && physicalSafetyInputsActive()) return false;
-  return mbCall(MbOp::Run, running ? 1 : 0);
+bool motorRun(bool running, uint32_t expectedEpoch) {
+  if (running && (isEmergencyLatched() || physicalSafetyInputsActive())) return false;
+  return running ? mbRunIfCurrent(expectedEpoch) : mbCall(MbOp::Run, 0);
 }
 
 bool startMotor() {
-  if (isEmergencyLatched() || physicalSafetyInputsActive() || otaInProgress()) return false;
+  if (isEmergencyLatched() || physicalSafetyInputsActive() || otaInProgress() || motorBrakeStopPending()) return false;
   Telemetry telemetry = mbTelemetry();
-  if (telemetry.valid && telemetry.fault != 0) return false;
+  if (!telemetry.valid || telemetry.fault != 0 || !stoppedFeedback(motorStopFeedback())) return false;
   motorLock();
+  uint32_t epoch = mbMotionEpoch();
   bool ok = motorConfigureForRun(config.accelerationMs);
 
   uint16_t setpoint = config.controlMode == ControlMode::ClosedLoop
                         ? config.targetRpm
                         : config.openLoopCommandRaw;
-  ok = ok && motorSetRuntimeSetpoint(setpoint) && motorRun(true);
+  ok = ok && motorSetRuntimeSetpoint(setpoint) && motorRun(true, epoch);
   if (ok) applyMotorRunState(true);
   motorUnlock();
   if (ok) safetyClearTrip();
@@ -91,11 +123,13 @@ bool startMotor() {
 }
 
 bool stopMotor() {
+  mbInvalidateMotion();
   motorLock();
   bool ok = true;
   if (mbCall(MbOp::Brake, 1)) {
     brakeStopPending = true;
     brakeStopSinceMs = millis();
+    normalStopConfirmation.reset();
   } else {
     brakeStopPending = false;
     ok = mbCall(MbOp::Run, 0);
@@ -105,15 +139,18 @@ bool stopMotor() {
   return ok;
 }
 
-void motorServiceBrakeStop(float rpm) {
+void motorServiceBrakeStop() {
   if (!brakeStopPending) return;
   motorLock();
   if (brakeStopPending && isEmergencyLatched()) {
     brakeStopPending = false;
   } else if (brakeStopPending &&
-             (rpm < SPINNING_RPM || millis() - brakeStopSinceMs > BRAKE_STOP_TIMEOUT_MS)) {
+             (normalStopConfirmation.update(motorStopFeedback(brakeStopSinceMs)) ||
+              millis() - brakeStopSinceMs > BRAKE_STOP_TIMEOUT_MS)) {
     if (mbCall(MbOp::Run, 0)) {
-      mbCall(MbOp::Brake, 0);
+      // Keep the brake asserted on an unconfirmed/timed-out stop.
+      if (normalStopConfirmation.update(motorStopFeedback(brakeStopSinceMs)) && !isEmergencyLatched())
+        mbCall(MbOp::Brake, 0);
       brakeStopPending = false;
     }
   }
@@ -123,9 +160,14 @@ void motorServiceBrakeStop(float rpm) {
 bool motorBrakeStopPending() { return brakeStopPending; }
 
 void emergencyStopMotor() {
+  portENTER_CRITICAL(&emergencyMux);
+  ++emergencySequence;
+  emergencyStopped = false;
+  portEXIT_CRITICAL(&emergencyMux);
   bool braked = false;
-  for (int attempt = 0; attempt < 4 && !braked; ++attempt)
+  for (int attempt = 0; attempt < 4 && !braked; ++attempt) {
     braked = mbCallUrgent(MbOp::Brake, 1, pdMS_TO_TICKS(120));
+  }
   if (!braked)
     for (int attempt = 0; attempt < 4; ++attempt)
       if (mbCallUrgent(MbOp::Run, 0, pdMS_TO_TICKS(120))) break;

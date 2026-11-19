@@ -22,14 +22,9 @@ static StreamBufferHandle_t rxStream = nullptr;
 static constexpr size_t RX_STREAM_BYTES = 8192;
 
 static void emergencyTaskFn(void *) {
-  static uint32_t lastMs = 0;
   for (;;) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     if (safetyBypassEnabled()) continue;
-
-    uint32_t now = millis();
-    if (now - lastMs < DEBOUNCE_MS) continue;
-    lastMs = now;
 
     rampStop();
     safetyRecordTrip("safety_input");

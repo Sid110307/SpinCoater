@@ -1,16 +1,22 @@
 #pragma once
 
 #include "config.h"
+#include "stop_feedback.h"
 
 void motorBegin();
 bool startMotor();
 bool stopMotor();
 void emergencyStopMotor();
-void motorServiceBrakeStop(float rpm);
+void motorServiceBrakeStop();
 bool motorBrakeStopPending();
+StopFeedback motorStopFeedback(uint32_t requestedMs = 0);
+
+uint32_t motorEmergencySequence();
+bool motorEmergencyStopConfirmed();
+void motorSetEmergencyStopConfirmed(bool confirmed);
 
 bool motorConfigureForRun(uint16_t accelMs);
-bool motorRun(bool running);
+bool motorRun(bool running, uint32_t expectedEpoch);
 bool motorSetRuntimeSetpoint(uint16_t value);
 
 bool changeControlMode(ControlMode controlMode);

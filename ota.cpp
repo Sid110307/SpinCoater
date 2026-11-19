@@ -46,7 +46,8 @@ bool otaInProgress() {
 String otaStart(const String &value) {
   if (restartAtMs) return error("OTA_BUSY");
   PulseSpeedSnapshot speed = getPulseSpeedSnapshot();
-  if (isMotorRunning() || motorBrakeStopPending() || rampGetState().active || (speed.valid && speed.rpm > SPINNING_RPM))
+  if (isEmergencyLatched() || isMotorRunning() || motorBrakeStopPending() || rampGetState().active ||
+      !stoppedFeedback(motorStopFeedback()) || (speed.valid && speed.rpm > SPINNING_RPM))
     return error("SAFETY_LOCKED");
 
   int comma = value.indexOf(',');

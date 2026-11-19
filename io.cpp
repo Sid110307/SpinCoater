@@ -46,7 +46,6 @@ String getJSONString() {
   doc["motor_fault"] = t.fault;
   doc["telemetry_valid"] = t.valid;
   doc["telemetry_age_ms"] = t.updatedMs ? (millis() - t.updatedMs) : 0;
-
   OvercurrentAlarm oc = mbOvercurrentAlarm();
   doc["overcurrent_alarm_amps"] = oc.amps;
   doc["overcurrent_alarm_valid"] = oc.valid;

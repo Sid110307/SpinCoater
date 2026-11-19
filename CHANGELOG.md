@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.305 - 2026-11-19
+
+- Expired queued commands cannot execute later
+- Missing or stale speed feedback no longer counts as a stopped rotor
+- Start, fault clearing, reboot and OTA require fresh stationary feedback
+- Physical safety-input notifications no longer have a 200 ms suppression window
+
 ## v0.304 - 2026-11-18
 
 - Firmware updates go over Bluetooth from the app (`ota_begin`, `ota_data`, `ota_end`, `ota_abort`)

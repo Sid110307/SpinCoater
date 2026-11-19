@@ -21,14 +21,6 @@ static void trip(const char *reason) {
   if (!stopMotor()) setEmergencyLatched(true);
 }
 
-static float spinRpm() {
-  PulseSpeedSnapshot s = getPulseSpeedSnapshot();
-  Telemetry t = mbTelemetry();
-  float r = s.valid ? s.rpm : 0.0f;
-  if (t.valid && t.speed > r) r = t.speed;
-  return r;
-}
-
 static void superviseHold(uint32_t now, bool running, bool rampActive) {
   if (!running || rampActive) {
     holdStartMs = 0;
@@ -73,20 +65,32 @@ static void superviseDriver(uint32_t now, bool running) {
   }
 }
 
-static void superviseEstop(uint32_t now, float rpm) {
+static void superviseEstop(uint32_t now) {
   static uint32_t lastTryMs = 0, latchedSince = 0;
   static bool runDropped = false;
+  static StopConfirmation confirmation;
+  static uint32_t sequence = 0;
   if (!isEmergencyLatched()) {
     estopStuck = false;
     latchedSince = 0;
     runDropped = false;
+    lastTryMs = 0;
+    confirmation.reset();
     return;
   }
-  if (latchedSince == 0) latchedSince = now ? now : 1;
-  bool slow = rpm < SPINNING_RPM;
+  uint32_t currentSequence = motorEmergencySequence();
+  if (latchedSince == 0 || sequence != currentSequence) {
+    sequence = currentSequence;
+    latchedSince = now ? now : 1;
+    runDropped = false;
+    lastTryMs = 0;
+    confirmation.reset();
+  }
+  bool slow = confirmation.update(motorStopFeedback(latchedSince));
   bool timedOut = now - latchedSince > BRAKE_STOP_TIMEOUT_MS;
   estopStuck = !slow && timedOut;
-  if (runDropped || now - lastTryMs < 250) return;
+  motorSetEmergencyStopConfirmed(slow);
+  if (runDropped || (lastTryMs && now - lastTryMs < 100)) return;
   lastTryMs = now;
   mbCallUrgent(MbOp::Brake, 1, pdMS_TO_TICKS(120));
   if ((slow || timedOut) && !runDropped)
@@ -105,9 +109,8 @@ static void safetyTaskFn(void *) {
     superviseHold(now, running, rampActive);
     superviseLink(now, running, rampActive);
     superviseDriver(now, running);
-    float rpm = spinRpm();
-    superviseEstop(now, rpm);
-    motorServiceBrakeStop(rpm);
+    superviseEstop(now);
+    motorServiceBrakeStop();
 
     if (!markedValid && now > 15000) {
       esp_ota_mark_app_valid_cancel_rollback();

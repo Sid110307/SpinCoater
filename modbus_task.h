@@ -30,9 +30,14 @@ struct Telemetry {
   bool valid = false;
   bool anyOk = false;
   uint32_t updatedMs = 0;
+  bool speedValid = false;
+  uint32_t speedUpdatedMs = 0;
 };
 
 void modbusTaskBegin();
+void mbInvalidateMotion();
+uint32_t mbMotionEpoch();
+bool mbRunIfCurrent(uint32_t expectedEpoch, TickType_t timeout = pdMS_TO_TICKS(300));
 bool mbCall(MbOp op, uint16_t arg = 0, TickType_t timeout = pdMS_TO_TICKS(300));
 bool mbCallUrgent(MbOp op, uint16_t arg = 0, TickType_t timeout = pdMS_TO_TICKS(300));
 bool mbCallDriverPacket(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE], DriverPacketResult &result,

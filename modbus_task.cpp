@@ -23,6 +23,7 @@ struct Waiter {
 };
 
 static portMUX_TYPE waiterLock = portMUX_INITIALIZER_UNLOCKED;
+static uint32_t motionEpoch = 0;
 
 struct MbRequest {
   MbOp op;
@@ -32,10 +33,14 @@ struct MbRequest {
   uint8_t packet[DRIVER_PACKET_REQUEST_SIZE]{};
   TickType_t packetQueuedAt = 0;
   TickType_t packetBudget = 0;
+  uint32_t epoch = 0;
 };
 
 static QueueHandle_t qNormal = nullptr;
 static QueueHandle_t qUrgent = nullptr;
+static QueueHandle_t qStop = nullptr;
+
+static void drainStopRequests();
 
 static SemaphoreHandle_t telemetryMutex = nullptr;
 static Telemetry telemetryCache;
@@ -44,9 +49,14 @@ static OvercurrentAlarm overcurrentAlarmCache;
 static bool refreshTelemetry() {
   uint16_t voltage = 0, current = 0, power = 0, speed = 0, fault = 0;
   bool okVoltage = modbusReadVoltage(voltage);
+  drainStopRequests();
   bool okCurrent = modbusReadCurrent(current);
+  drainStopRequests();
   bool okPower = modbusReadPower(power);
+  drainStopRequests();
   bool okSpeed = modbusReadSpeed(speed);
+  uint32_t speedSampleMs = millis();
+  drainStopRequests();
   bool okFault = modbusReadFault(fault);
   bool ok = okVoltage && okCurrent && okPower && okSpeed && okFault;
 
@@ -59,6 +69,8 @@ static bool refreshTelemetry() {
   telemetryCache.valid = ok;
   telemetryCache.anyOk = okVoltage || okCurrent || okSpeed || okFault;
   telemetryCache.updatedMs = millis();
+  telemetryCache.speedValid = okSpeed;
+  if (okSpeed) telemetryCache.speedUpdatedMs = speedSampleMs;
   if (telemetryMutex) xSemaphoreGive(telemetryMutex);
 
   return ok;
@@ -159,6 +171,24 @@ static void reply(const MbRequest &r, bool ok, const DriverPacketResult *packetR
 }
 
 static void executeAndReply(const MbRequest &r) {
+  bool current;
+  portENTER_CRITICAL(&waiterLock);
+  current = r.waiter && r.waiter->ticket == r.ticket;
+  portEXIT_CRITICAL(&waiterLock);
+  if (!current || xTaskGetTickCount() - r.packetQueuedAt >= r.packetBudget) {
+    reply(r, false);
+    return;
+  }
+  const bool stop = (r.op == MbOp::Brake && r.arg == 1) || (r.op == MbOp::Run && r.arg == 0);
+  const bool read = r.op == MbOp::RefreshTelemetry || r.op == MbOp::RefreshOvercurrentAlarm ||
+                    (r.op == MbOp::DriverPacket && r.packet[1] == 0x03);
+  portENTER_CRITICAL(&waiterLock);
+  bool cancelled = r.epoch != motionEpoch;
+  portEXIT_CRITICAL(&waiterLock);
+  if (!stop && !read && (cancelled || isEmergencyLatched() || physicalSafetyInputsActive())) {
+    reply(r, false);
+    return;
+  }
   if (r.op == MbOp::DriverPacket) {
     DriverPacketResult result;
     bool ok = executeDriverPacket(r, result);
@@ -168,21 +198,25 @@ static void executeAndReply(const MbRequest &r) {
   }
 }
 
+static void drainStopRequests() {
+  MbRequest request;
+  while (qStop && xQueueReceive(qStop, &request, 0) == pdTRUE)
+    executeAndReply(request);
+}
+
 static void modbusTaskFn(void*) {
   esp_task_wdt_add(nullptr);
   MbRequest r;
   for (;;) {
     esp_task_wdt_reset();
+    drainStopRequests();
     if (xQueueReceive(qUrgent, &r, 0) == pdTRUE) {
       executeAndReply(r);
       continue;
     }
 
     if (xQueueReceive(qNormal, &r, pdMS_TO_TICKS(5)) == pdTRUE) {
-      if (isEmergencyLatched()) {
-        reply(r, false);
-        continue;
-      }
+      drainStopRequests();
       executeAndReply(r);
     }
   }
@@ -224,7 +258,8 @@ static Waiter *myWaiter() {
 }
 
 static bool submit(QueueHandle_t q, MbOp op, uint16_t arg, TickType_t timeout,
-                   const uint8_t *packet = nullptr, DriverPacketResult *packetResult = nullptr) {
+                   const uint8_t *packet = nullptr, DriverPacketResult *packetResult = nullptr,
+                   const uint32_t *expectedEpoch = nullptr) {
   if (!q) return false;
 
   Waiter *w = myWaiter();
@@ -235,17 +270,25 @@ static bool submit(QueueHandle_t q, MbOp op, uint16_t arg, TickType_t timeout,
   while (xSemaphoreTake(w->sem, 0) == pdTRUE) {}
 
   MbRequest r{ op, arg, w, ticket };
+  portENTER_CRITICAL(&waiterLock);
+  r.epoch = expectedEpoch ? *expectedEpoch : motionEpoch;
+  portEXIT_CRITICAL(&waiterLock);
+  r.packetQueuedAt = xTaskGetTickCount();
+  r.packetBudget = timeout;
   if (packet) {
     memcpy(r.packet, packet, sizeof(r.packet));
-    r.packetQueuedAt = xTaskGetTickCount();
-    r.packetBudget = timeout;
   }
   if (xQueueSend(q, &r, timeout) != pdTRUE) return false;
 
-  TickType_t start = xTaskGetTickCount();
+  auto expired = [&]() {
+    portENTER_CRITICAL(&waiterLock);
+    if (w->ticket == ticket) ++w->ticket;
+    portEXIT_CRITICAL(&waiterLock);
+    return false;
+  };
   for (;;) {
-    TickType_t used = xTaskGetTickCount() - start;
-    if (used >= timeout || xSemaphoreTake(w->sem, timeout - used) != pdTRUE) return false;
+    TickType_t used = xTaskGetTickCount() - r.packetQueuedAt;
+    if (used >= timeout || xSemaphoreTake(w->sem, timeout - used) != pdTRUE) return expired();
     if (w->doneTicket == ticket) {
       if (w->ok && packetResult) *packetResult = w->packetResult;
       return w->ok;
@@ -254,11 +297,30 @@ static bool submit(QueueHandle_t q, MbOp op, uint16_t arg, TickType_t timeout,
 }
 
 bool mbCall(MbOp op, uint16_t arg, TickType_t timeout) {
-  return submit(qNormal, op, arg, timeout);
+  bool stop = (op == MbOp::Brake && arg == 1) || (op == MbOp::Run && arg == 0);
+  return submit(stop ? qStop : qNormal, op, arg, timeout);
+}
+
+void mbInvalidateMotion() {
+  portENTER_CRITICAL(&waiterLock);
+  ++motionEpoch;
+  portEXIT_CRITICAL(&waiterLock);
+}
+
+uint32_t mbMotionEpoch() {
+  portENTER_CRITICAL(&waiterLock);
+  uint32_t value = motionEpoch;
+  portEXIT_CRITICAL(&waiterLock);
+  return value;
+}
+
+bool mbRunIfCurrent(uint32_t expectedEpoch, TickType_t timeout) {
+  return submit(qNormal, MbOp::Run, 1, timeout, nullptr, nullptr, &expectedEpoch);
 }
 
 bool mbCallUrgent(MbOp op, uint16_t arg, TickType_t timeout) {
-  return submit(qUrgent, op, arg, timeout);
+  bool stop = (op == MbOp::Brake && arg == 1) || (op == MbOp::Run && arg == 0);
+  return submit(stop ? qStop : qUrgent, op, arg, timeout);
 }
 
 bool mbCallDriverPacket(const uint8_t request[DRIVER_PACKET_REQUEST_SIZE],
@@ -292,6 +354,7 @@ OvercurrentAlarm mbOvercurrentAlarm() {
 void modbusTaskBegin() {
   qNormal = xQueueCreate(16, sizeof(MbRequest));
   qUrgent = xQueueCreate(8, sizeof(MbRequest));
+  qStop = xQueueCreate(8, sizeof(MbRequest));
   telemetryMutex = xSemaphoreCreateMutex();
 
   xTaskCreatePinnedToCore(modbusTaskFn, "modbus", 4096, nullptr, PRIO_MODBUS, nullptr, 1);
